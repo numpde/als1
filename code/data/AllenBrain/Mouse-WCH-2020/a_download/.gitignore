@@ -1,0 +1,3 @@
+!dummy_*.csv
+!.gitignore
+*.zip

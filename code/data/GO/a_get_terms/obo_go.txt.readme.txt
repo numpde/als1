@@ -1,0 +1,4 @@
+{
+  "source": "http://purl.obolibrary.org/obo/go.obo",
+  "datetime": "2021-03-15 18:30:28.596375+00:00"
+}

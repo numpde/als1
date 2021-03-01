@@ -1,0 +1,4583 @@
+---
+title: "On fibroblast activation"
+author: "RA ([numpde](https://github.com/numpde/))"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    self_contained: false
+    keep_md: true
+    #code_folding: show
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+# class.source = 'fold-show'
+# https://bookdown.org/yihui/rmarkdown-cookbook/fold-show.html
+
+knitr::opts_knit$set(root.dir = ".")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(out.width = "100%")
+knitr::opts_chunk$set(fig.width = 10, fig.height = 8, dpi = 72)
+
+# https://stackoverflow.com/questions/63595786/rmarkdown-how-to-embed-an-3d-plot
+# options(rgl.useNULL = TRUE) # Suppress the separate window.
+```
+
+
+## Introduction
+
+We look for genes associated with fibroblast activation
+in several single-cell datasets.
+
+
+## Preliminaries {.tabset .tabset-fade .tabset-pills}
+
+### >
+
+### Setup {.tabset}
+
+#### Packages
+
+```{r}
+suppressPackageStartupMessages({
+  # install.packages("BiocManager")
+
+  # install.packages("kableExtra")
+  requireNamespace("kableExtra")
+
+  # ?
+  # devtools::install_github("rstudio/crosstalk")
+  # library("crosstalk")
+  # library("htmlwidgets")
+
+  # install.packages("crunch")
+  # requireNamespace("crunch")
+
+  # https://rstudio.github.io/DT/
+  # install.packages("DT")
+  requireNamespace("DT")
+
+  # install.packages("RCurl")
+  requireNamespace("RCurl")
+
+  # install.packages("dplyr")
+  library(dplyr)
+
+  # install.packages("ggplot2")
+  library(ggplot2)
+
+  # install.packages("ggsci")
+  requireNamespace("ggsci")
+  # install.packages("ggtext")
+  requireNamespace("ggtext")
+  # install.packages("ggrepel")
+  requireNamespace("ggrepel")
+
+  # install.packages("assertthat")
+  requireNamespace("assertthat")
+
+  #
+  requireNamespace("magrittr")
+  `%<>%` <- magrittr::`%<>%`
+  `%>%` <- magrittr::`%>%`
+
+  # install.packages("glue")
+  requireNamespace("glue")
+  glue <- glue::glue
+
+  # install.packages("tidyr")
+  requireNamespace("tidyr")
+
+  # BiocManager::install("org.Mm.eg.db")
+  # BiocManager::install("org.Hs.eg.db")
+  requireNamespace("org.Mm.eg.db")
+  requireNamespace("org.Hs.eg.db")
+
+  # https://www.bioconductor.org/packages/release/bioc/vignettes/goseq/inst/doc/goseq.pdf
+  # BiocManager::install("goseq")
+  # requireNamespace("goseq")
+
+  # install.packages("pracma")
+  requireNamespace("pracma")
+
+  # https://vroom.r-lib.org/articles/vroom.html
+  # install.packages("vroom")
+  requireNamespace("vroom")
+
+  # BiocManager::install("DESeq2")
+  requireNamespace("DESeq2")
+
+  # BiocManager::install("scater")
+  requireNamespace("scater")
+
+  # BiocManager::install("scran")
+  # requireNamespace("scran")
+
+  # BiocManager::install("igraph")
+  requireNamespace("igraph")
+
+  # install.packages("pheatmap")
+  requireNamespace("pheatmap")
+
+  # install.packages("gridExtra")
+  requireNamespace("gridExtra")
+
+  # install.packages("pathlibr")
+  requireNamespace("pathlibr")
+  # install.packages("stringr")
+  requireNamespace("stringr")
+  # install.packages("reshape2")
+  requireNamespace("reshape2")
+
+  # install.packages("pbapply")
+  # requireNamespace("pbapply")
+
+  # install.packages("Rtsne")
+  requireNamespace("Rtsne")
+  # install.packages("uwot")
+  requireNamespace("uwot")
+
+  # avoid importing `exprs` that leads to clashes
+  requireNamespace("rlang")
+
+  # install.packages("Seurat")
+  # requireNamespace("Seurat")
+
+  # BiocManager::install("TrajectoryUtils") # Didn't work
+  # devtools::install_github("LTLA/TrajectoryUtils@e943606")
+  # BiocManager::install("kstreet13/slingshot@25fc566")
+  # requireNamespace("slingshot")
+
+  # BiocManager::install("tradeSeq")
+  # requireNamespace("tradeSeq")
+
+  # install.packages("statmod")
+
+  # BiocManager::install("edgeR")
+  requireNamespace("edgeR")
+
+  # https://github.com/eliocamp/ggnewscale
+  # install.packages("ggnewscale")
+  # requireNamespace("ggnewscale")
+
+  # https://www.rdocumentation.org/packages/DGCA/versions/1.0.2
+  # BiocManager::install("impute")
+  # BiocManager::install("preprocessCore")
+  # BiocManager::install("GO.db")
+  # install.packages("WGCNA")
+  # install.packages("DGCA")
+  requireNamespace("DGCA")
+
+
+  # https://github.com/danielschw188/Revelio
+  # devtools::install_github('danielschw188/Revelio@e8e1492')
+  requireNamespace("Revelio")
+
+  # # install.packages("rgl")
+  # requireNamespace("rgl")
+
+  # install.packages("plotly")
+  requireNamespace("plotly")
+
+  # https://www.rdocumentation.org/packages/Hmisc/versions/4.5-0/topics/rcorr
+  # install.packages("Hmisc")
+  requireNamespace("Hmisc")
+
+  # BiocManager::install("multiGSEA")
+  # requireNamespace("multiGSEA")
+
+  # install.packages("tidygraph")
+  # install.packages("ggraph")
+  requireNamespace("ggraph")
+  requireNamespace("tidygraph")
+
+  # https://htmlpreview.github.io/?https://github.com/aertslab/SCENIC/blob/master/inst/doc/SCENIC_Setup.html
+  # BiocManager::install(c("AUCell", "RcisTarget"))
+  # BiocManager::install(c("GRNBoost"))
+  # BiocManager::install(c("doMC", "doRNG"))
+  # devtools::install_github("aertslab/SCENIC@0585e87")
+  # requireNamespace("SCENIC")
+})
+```
+
+#### Session
+
+```{r}
+sessionInfo()
+```
+
+#### Generic
+
+##### RNG
+
+```{r}
+set.seed(43)
+```
+
+##### Dual of the python star-star operator, sort of
+
+```{r}
+dual <- function(f, g) {
+  if (missing(g)) {
+    stopifnot(class(f) == "function")
+    (function(L) do.call(f, Filter(Negate(is.null), L)))
+  } else {
+    stopifnot(class(f) == "list")
+    stopifnot(class(g) == "function")
+    dual(g)(f)
+  }
+}
+```
+
+Example 1:
+
+```{r}
+list(
+  biggle = list(A = "hello", B = "world"),
+  wiggle = list(A = "Hello", B = "World", C = NULL)
+) %>%
+  lapply(dual(function(B, A) paste(A, B)))
+```
+
+Example 2:
+
+```{r}
+list(
+  A = data.frame(x = c("xa1", "xa2"), y = c("ya1", "ya2")),
+  B = data.frame(x = c("xb1", "xb2"), y = c("yb1", "yb2")),
+  C = data.frame(x = c("xc1", "xc2"), y = c("yc1", "yc2"))
+) %>%
+  # No need for the brackets!
+  dual(cbind)
+```
+
+##### Memory drain culprits
+
+```{r}
+culprits <- function() {
+  search()[[1]] %>%
+    ls(name = .) %>%
+    sapply(. %>% get() %>% object.size() %>% "/"(1e6)) %>%
+    data.frame(size = .) %>%
+    arrange(size) %>%
+    mutate(cumsize = cumsum(size)) %>%
+    arrange(desc(size)) %>%
+    mutate(across(everything(), ~ signif(.x, digits = 2))) %>%
+    mutate(unit = "Mb")
+}
+```
+
+Example:
+
+```{r}
+culprits() %>% head(3)
+```
+
+#### Paths
+
+```{r}
+for (i in 1:2) {
+  BASEPATH <- pathlibr::Path$new(Sys.glob(paste(c("work", ".."), "*FibroAct", sep = "/")))
+  setwd(BASEPATH$show)
+}
+
+print(paste("Work path:", BASEPATH))
+
+stopifnot("main.Rmd" %in% names(BASEPATH$dir))
+```
+
+```{r}
+path_to <- (function(.) Sys.glob(BASEPATH$join("../..")$join(.)$show))
+```
+
+```{r}
+out_file <- (function(.) BASEPATH$join("output")$join(.)$show)
+dir.create(out_file(""), showWarnings = FALSE)
+```
+
+#### Tables
+
+Basic table printing.
+
+```{r}
+kable <- function(.) {
+  kableExtra::kbl(., align = "c") %>%
+    kableExtra::kable_paper("hover", full_width = FALSE)
+}
+```
+
+Options for fancy datatable printing.
+
+```{r}
+options(DT.options = list(
+  pageLength = 16,
+  language = list(search = "Filter:"),
+  scrollX = TRUE
+))
+```
+
+Converting a symbol or GO ID to a link.
+
+```{r}
+as.link <-
+  function(x) {
+    dplyr::case_when(
+      # If x is like GO:003453
+      startsWith(x, "GO:") ~ paste0(
+        "<a target='_blank'",
+        "href='", "http://amigo.geneontology.org/amigo/term/", x, "'",
+        ">", x, "</a>"
+      ),
+      # Otherwise try this
+      TRUE ~ paste0(
+        "<a target='_blank'",
+        "href='", "http://www.informatics.jax.org/marker/summary?nomen=", x, "'",
+        ">", x, "</a>"
+      )
+    )
+  }
+```
+
+Example
+
+```{r}
+data.frame(x = c("GO:00345", "Lama")) %>%
+  mutate(link = as.link(x)) %>%
+  DT::datatable(width = "100%")
+```
+
+Printing a sequence of tables
+
+```{r}
+kable_all <- function(tt) {
+  for (t in tt) {
+    t %>%
+      table() %>%
+      t() %>%
+      kable() %>%
+      print()
+  }
+}
+```
+
+```{r, results='asis'}
+# with results='asis'
+list(
+  a = c(c(1:5), c(2:5), c(3:5)),
+  b = c(c(1:6), c(2:6), c(3:6)),
+  b = c(c(1:7), c(2:7), c(3:7)),
+  b = c(c(1:9), c(2:9), c(3:9))
+) %>% kable_all()
+```
+
+
+#### Plotting
+
+```{r}
+ggplot2::theme_set(theme_light(base_size = 15))
+```
+
+
+```{r}
+gglast <- function(what) {
+  p <- ggplot2::last_plot()
+  q <- p$mapping[[deparse(substitute(what))]]
+  rlang::eval_tidy(q, data = p$data)
+}
+
+# example: scale_fill_manual(values = color_map, breaks = gglast(fill))
+```
+
+```{r}
+# Converts an annotation column (e.g. sce$group)
+# to a named vector of colors (group -> color)
+# List of palettes: grDevices::hcl.pals()
+# http://colorspace.r-forge.r-project.org/reference/hcl_palettes.html
+ramp <- function(anno, palette = "Temps") {
+  anno %>%
+    as.character() %>%
+    unique() %>%
+    c(NA) %>%
+    data.frame(
+      item = .,
+      # https://developer.r-project.org/Blog/public/2019/04/01/hcl-based-color-palettes-in-grdevices/
+      color = length(.) %>% colorRampPalette(grDevices::hcl.colors(n = ., palette = palette))(.)
+    ) %>%
+    tidyr::drop_na() %>%
+    pull(color, item)
+}
+```
+
+Example:
+
+```{r}
+ramp(c("Grp1", "Grp2", "Grp1"), palette = "Dark 3") %>%
+  t() %>%
+  kable()
+```
+
+
+
+```{r}
+RGB <- function(arr, alpha = 1) {
+  stopifnot(ncol(arr) == 3)
+
+  arr %>%
+    as.data.frame() %>%
+    `/`(255) %>%
+    mutate(alpha = alpha) %>%
+    mutate(colors = apply(., 1, \(x) rgb(x[1], x[2], x[3], alpha = x[["alpha"]]))) %>%
+    pull(colors)
+}
+```
+
+Example:
+
+```{r}
+(1:7) %>%
+  percent_rank() %>%
+  (colorRamp(c("blue", "red"))) %>%
+  RGB(alpha = 0.5) %>%
+  t() %>%
+  kable()
+```
+
+
+Colors for consistency; may be overwritten below.
+
+```{r}
+colors <- unlist(
+  c(
+    list(
+      `374_VLMC` = "aquamarine3",
+      `375_VLMC` = "chartreuse4",
+      `376_VLMC` = "chartreuse3",
+      `FB1` = "cornflowerblue",
+      `FB2` = "blue",
+      `Ctrl` = "chartreuse4",
+      `EAE` = "coral2",
+      `VLMC1` = "chartreuse1",
+      `VLMC3` = "coral3",
+      `VLMC4` = "coral4",
+      `healthy` = "green",
+      `EAE1` = "coral1",
+      `EAE2` = "coral3",
+      `healthy1` = "aquamarine",
+      `healthy2` = "chartreuse3",
+      `healthy3` = "chartreuse4",
+      `positive` = "Red4",
+      `negative` = "Steelblue1"
+    ),
+    ramp(c("G1.S", "S", "G2", "G2.M", "M.G1"), palette = "Dark 3")
+  )
+)
+```
+
+```{r, dpi=36}
+colors %>%
+  unlist() %>%
+  data.frame(c = .) %>%
+  mutate(item = rownames(.)) %>%
+  ggplot(aes(y = item, x = 1)) +
+  geom_tile(fill = colors, stat = "identity") +
+  scale_y_discrete(limits = rev(names(colors))) +
+  theme(
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.title = element_blank()
+  )
+```
+
+Zoomable figures.
+
+```{js}
+///*
+$(document).ready(
+  function() {
+    $("img.zoomable").on("click", function(evt) {
+      if (evt.originalEvent.shiftKey) {
+        var el = $(this).clone();
+        el.attr("width", "2048px");
+        window.open().document.write(el.wrap('<p>').parent().html());
+        return false;
+      }
+    });
+  }
+);
+//*/
+```
+
+Shift+click on a figure to zoom:
+
+```{r, out.extra='class="zoomable"', dpi=36, out.width='20%', results='hide'}
+list(
+  randu %>% ggplot(aes(x = x, y = y)) +
+    geom_point() +
+    ggtitle("Zoomable 1"),
+  randu %>% ggplot(aes(x = x, y = z)) +
+    geom_point() +
+    ggtitle("Zoomable 2")
+)
+```
+
+Click-scrollable figures (like slides):
+
+```{js}
+$(document).ready(
+  function() {
+    $("img.scrollable").css({
+      'position': 'absolute', 'top': 0, 'left': 0, 'z-index': 100000,
+    });
+    
+    $("img.scrollable").parent().css({'position': 'relative'});
+    $("img.scrollable").parent().find('img:first').css({'position': 'relative'});
+    
+    $("img.scrollable").on("click", function(evt) {
+      if (!evt.originalEvent.altKey && !evt.originalEvent.shiftKey) {
+        $(this).css({'z-index': parseInt($(this).css('z-index'), 10) - 1});
+        evt.stopPropagation();
+        return false;
+      };
+      
+      return true;
+    });
+  }
+);
+```
+
+Click a figure to slide:
+
+```{r, out.extra='class="scrollable"', dpi=36, out.width='20%', results='hide'}
+list(
+  randu %>% ggplot(aes(x = x, y = y)) +
+    geom_point() +
+    ggtitle("Slide 1"),
+  randu %>% ggplot(aes(x = x, y = z)) +
+    geom_point() +
+    ggtitle("Slide 2")
+)
+```
+
+
+#### Dataframes
+
+```{r}
+# Use first column as index
+by_col1 <- (function(.) tibble::column_to_rownames(., colnames(.)[1]))
+# Use index as new column `name`
+ind2col <- (function(., name) tibble::rownames_to_column(., var = name))
+```
+
+```{r}
+take_rows <- function(df, rows = NULL) {
+  if (!is.null(rows)) {
+    return(df[rows[rows %in% rownames(df)], , drop = FALSE])
+  } else {
+    return(df)
+  }
+}
+```
+
+```{r}
+# For reading wide tables
+Sys.setenv("VROOM_CONNECTION_SIZE" = 2 ** 18)
+
+from_tsv <- function(filename, sep = "\t") {
+  filename %>%
+    vroom::vroom(del = sep, progress = FALSE) %>%
+    suppressMessages() %>%
+    by_col1()
+}
+```
+
+```{r}
+# Writes dataframe to tab-separated file
+# Precede by `ind2col("name for index")` to write the row names
+to_tsv <- function(df, fn, sep = "\t") {
+  vroom::vroom_write(df, out_file(fn), delim = sep)
+}
+```
+
+
+
+##### Random sub-dataframe
+
+```{r}
+# A small random sub-dataframe (intended for genes x samples)
+shample <- function(df) {
+  df[
+    sample(rownames(df), min(nrow(.), 333)),
+    sample(colnames(df), min(ncol(.), 33))
+  ]
+}
+```
+
+#### SCE
+
+```{r}
+# Constructs a `SingleCellExperiment` checking consistency of sample names
+make_sce <- function(counts, coldata) {
+  # Check that samples in counts = genes x samples
+  # are ordered as in coldata = samples x metafields
+  stopifnot(assertthat::are_equal(colnames(counts), rownames(coldata)))
+
+  SingleCellExperiment::SingleCellExperiment(
+    assays = list(counts = counts), colData = coldata
+  )
+}
+```
+
+```{r}
+mock_sce <- function(genes, ncells) {
+  sce <- scater::mockSCE(ngenes = length(genes), ncells = ncells)
+
+  sce <- make_sce(
+    sce@assays@data$counts %>% as.data.frame(row.names = genes),
+    sce@colData %>% as.data.frame() %>% rename(celltype = Mutation_Status)
+  )
+
+  sce
+}
+```
+
+```{r, include=FALSE}
+# only <- function(sce, genes = NULL) {
+#   if (!is.null(genes))
+#     return(only(sce[intersect(genes, rownames(sce)), ]))
+#
+#   message(paste("Using", nrow(sce), "genes:", paste0(rownames(sce) %>% `[`(1:min(5, length(sce))), collapse = ", "), "..."))
+#
+#   sce[, colSums(sce@assays@data$counts) != 0]
+# }
+```
+
+```{r}
+drop_empty <- function(sce) {
+  sce[, colSums(abs(sce@assays@data$counts)) != 0]
+}
+```
+
+```{r}
+# Normalizes samplewise to sum(expr) = 1
+# Consider using sce %>% scater::logNormCounts() %>% ...
+norm1 <- function(sce) {
+  sce@assays@data$counts %<>%
+    t() %>%
+    {
+      (.) / (rowSums(.))
+    } %>%
+    t()
+
+  sce
+}
+```
+
+```{r}
+# Example
+mock_sce(genes = LETTERS[1:10], ncells = 3) %>%
+  take_rows(LETTERS[1:5]) %>%
+  drop_empty() %>%
+  norm1() %>%
+  scater::logNormCounts() %>%
+  scater::aggregateAcrossFeatures(ids = c("V", "C", "C", "C", "V"), average = TRUE)
+```
+
+
+### Gene meta {.tabset}
+
+#### Taxons
+
+```{r}
+taxid <- list(mm = 10090, hs = 9606)
+```
+
+```{r, echo=FALSE}
+taxid %>%
+  t() %>%
+  kable()
+```
+
+#### EntrezID
+
+```{r}
+symbol2geneid <- function(genes) {
+  data.frame(symbol = genes) %>%
+    merge(
+      y = org.Mm.eg.db::org.Mm.egSYMBOL2EG %>% as.data.frame(),
+      all.x = TRUE,
+      by = "symbol",
+      sort = FALSE # !
+    ) %>%
+    pull(gene_id, symbol)
+}
+```
+
+```{r}
+c("Jun", "Junb", "Junc") %>%
+  data.frame(symbol = .) %>%
+  mutate(gene_id = symbol2geneid(symbol)) %>%
+  kable()
+```
+
+
+#### Omnipath
+
+##### PPI
+
+```{r}
+omnipath.in <-
+  path_to("*/*/*/omnipath_in.csv.gz") %>%
+  from_tsv() %>%
+  select(
+    source, source_genesymbol, target, target_genesymbol,
+    organism,
+    is_inhibition, is_stimulation
+  )
+```
+
+Preview:
+
+```{r, echo=FALSE}
+omnipath.in %>%
+  group_by(organism) %>%
+  slice_head(n = 3) %>%
+  ungroup() %>%
+  DT::datatable(width = "100%")
+```
+
+##### TF-target
+
+```{r}
+omnipath.tf <-
+  path_to("*/*/*/omnipath_tf.csv.gz") %>%
+  from_tsv() %>%
+  select(
+    source, source_genesymbol, target, target_genesymbol,
+    organism,
+    is_inhibition, is_stimulation
+  )
+```
+
+Preview:
+
+```{r, echo=FALSE}
+omnipath.tf %>%
+  group_by(organism) %>%
+  slice_head(n = 3) %>%
+  ungroup() %>%
+  DT::datatable(width = "100%")
+```
+
+##### Ligand-receptor
+
+```{r}
+omnipath.lr <-
+  path_to("*/*/*/omnipath_lr.csv.gz") %>%
+  from_tsv()
+```
+
+Preview:
+
+```{r, echo=FALSE}
+omnipath.lr %>%
+  group_by(organism) %>%
+  slice_head(n = 3) %>%
+  ungroup() %>%
+  DT::datatable(width = "100%")
+```
+
+##### Annotating genes
+
+We use Omnipath to annotate
+genes with their role
+using the following function.
+
+```{r}
+# For a vector of gene symbols returns
+# a vector containing the role of each symbol
+symbol2role <- function(symbol, organism = taxid$mm) {
+  f <- function(df) {
+    df %>% filter(organism == organism)
+  }
+
+  data.frame(
+    TF = if_else(symbol %in% f(omnipath.tf)$source_genesymbol, "TF", ""),
+    Tgt = if_else(symbol %in% f(omnipath.tf)$target_genesymbol, "Tgt", ""),
+    Lig = if_else(symbol %in% f(omnipath.lr)$source_genesymbol, "Lig", ""),
+    Rec = if_else(symbol %in% f(omnipath.lr)$target_genesymbol, "Rec", "")
+  ) %>%
+    apply(MARGIN = 1, FUN = function(row) {
+      if (any(nzchar(row))) {
+        paste(row[nzchar(row)], collapse = "/")
+      } else {
+        "--"
+      }
+    })
+}
+```
+
+For example:
+
+```{r}
+data.frame(symbol = c("Jun", "Notch1", "Xyz")) %>%
+  mutate(role = symbol2role(symbol)) %>%
+  kable()
+```
+
+#### Annotation
+
+The following provides a gene name (`description`)
+and a longer explanation (`summary`).
+
+```{r}
+gene.summary <-
+  taxid %>%
+  lapply(
+    function(i) {
+      path_to(paste0("*/NCBI/gene/*/", names(which(. == i)), ".tsv.gz")) %>%
+        from_tsv() %>%
+        ind2col("gene_id")
+    }
+  )
+```
+
+Preview:
+
+```{r, echo=FALSE}
+gene.summary %>%
+  lapply(head) %>%
+  dual(rbind) %>%
+  mutate(summary = if_else(is.na(summary), summary, paste(substr(summary, 1, 77), "..."))) %>%
+  DT::datatable(width = "100%")
+```
+
+The following function sets up a gene id/symbol homology table.
+
+```{r}
+# homology(taxid$mm, taxid$hs) %>% head
+# gives a dataframe like
+#   gene_id.y gene_id.x  symbol.x symbol.y
+# 1         1    117586      A1bg     A1BG
+# 2         2    232345       A2m      A2M
+# 3         9     17961      Nat2     NAT1
+# 4        10     17960      Nat1     NAT2
+# 5        12     16625 Serpina3c SERPINA3
+# 6        13     67758     Aadac    AADAC
+homology <- function(taxid.x, taxid.y) {
+  # Assume that `gene_id` is unique
+  symbols <- rbind(
+    org.Mm.eg.db::org.Mm.egSYMBOL2EG %>% as.data.frame(),
+    org.Hs.eg.db::org.Hs.egSYMBOL2EG %>% as.data.frame()
+  )
+
+
+  path_to("*/MGI/*/vertebrate_homology.tsv*") %>%
+    from_tsv() %>%
+    select(gene_id = EntrezGene_ID, taxid = NCBI_Taxon_ID, hg = HomoloGene_ID) %>%
+    filter(taxid %in% c(taxid.x, taxid.y)) %>%
+    mutate(taxid = if_else(taxid == taxid.x, "x", "y")) %>%
+    stats::reshape(direction = "wide", idvar = "hg", timevar = "taxid") %>%
+    # "multiple rows match for taxid"
+    suppressWarnings() %>%
+    select(gene_id.x, gene_id.y) %>%
+    merge(y = symbols %>% select(gene_id.x = gene_id, symbol.x = symbol), by = "gene_id.x") %>%
+    merge(y = symbols %>% select(gene_id.y = gene_id, symbol.y = symbol), by = "gene_id.y")
+}
+```
+
+For example:
+
+```{r}
+homology(taxid$mm, taxid$hs) %>%
+  head(11) %>%
+  {
+    .[, order(colnames(.))]
+  } %>%
+  mutate(seems.resonable = (tolower(symbol.x) == tolower(symbol.y))) %>%
+  rbind("...") %>%
+  kable()
+```
+
+We use that
+to add description/summary to mouse genes by homology.
+
+```{r}
+gene.summary$mm %<>%
+  merge(
+    x = .,
+    y = merge(
+      x = gene.summary$hs %>%
+        select(gene_id, summ = summary, desc = description) %>%
+        mutate(desc = if_else(is.na(desc), desc, paste("By homology:", desc))) %>%
+        mutate(summ = if_else(is.na(summ), summ, paste("By homology:", summ))),
+      y = path_to("*/MGI/*/vertebrate_homology.tsv*") %>%
+        from_tsv() %>%
+        filter(NCBI_Taxon_ID %in% taxid) %>%
+        select(gene_id = EntrezGene_ID, taxid = NCBI_Taxon_ID, hg = HomoloGene_ID) %>%
+        stats::reshape(direction = "wide", idvar = "hg", timevar = "taxid") %>%
+        select(gene_id = gene_id.9606, alt_gene_id = gene_id.10090),
+      by = "gene_id",
+      all = FALSE
+    ) %>%
+      select(gene_id = alt_gene_id, alt_desc = desc, alt_summ = summ),
+    by = "gene_id",
+    all.x = TRUE,
+    all.y = FALSE,
+    sort = FALSE
+  ) %>%
+  mutate(summary = if_else(!is.na(summary), summary, alt_summ)) %>%
+  mutate(description = if_else(!is.na(description), description, alt_desc)) %>%
+  select(-alt_desc, -alt_summ)
+```
+
+Preview:
+
+```{r, echo=FALSE}
+gene.summary %>%
+  lapply(head) %>%
+  dual(rbind) %>%
+  mutate(summary = if_else(is.na(summary), summary, paste(substr(summary, 1, 77), "..."))) %>%
+  DT::datatable(width = "100%")
+```
+
+
+### Gene sets {.tabset}
+
+#### Genes of interest
+
+##### Define gene sets
+
+```{r}
+goi <-
+  list(
+    neuroinflammation = list(
+      name = "Neuroinflammation",
+      genes = unique(c(
+        # "Early response" transcription factors: Fos, Fosb, Junb
+        c("Fos", "Fosb", "Junb"),
+
+        # Wikipathways Neuroinflammation:
+        # https://www.wikipathways.org/instance/WP4919_r111814
+        # Downloaded from
+        # http://www.gsea-msigdb.org/gsea/msigdb/cards/WP_NEUROINFLAMMATION.html
+        c("Ascc1", "Chuk", "Fos", "Jun", "Mapk14", "Mapk8", "mt-Co1", "mt-Co2", "Mtor", "Nfkbia", "Nos2", "Rela", "Tlr4")
+      ))
+    ),
+
+    # From 2021-Manberg-...-Lewandowski, p.643
+    pvf = list(
+      name = "PVF",
+      genes = c("Spp1", "Col6a1", "Col1a1", "Mmp2")
+    ),
+
+    # Collagen
+    col = list(
+      name = "Collagen",
+      genes = c(
+        "Col10a1", "Col11a1", "Col11a2", "Col12a1", "Col13a1", "Col14a1",
+        "Col15a1", "Col16a1", "Col17a1", "Col18a1", "Col19a1", "Col1a1",
+        "Col1a2", "Col20a1", "Col22a1", "Col23a1", "Col24a1", "Col25a1",
+        "Col26a1", "Col27a1", "Col28a1", "Col2a1", "Col3a1", "Col4a1",
+        "Col4a2", "Col4a3", "Col4a3bp", "Col4a4", "Col4a5", "Col4a6",
+        "Col5a1", "Col5a2", "Col5a3", "Col6a1", "Col6a2", "Col6a3",
+        "Col6a4", "Col6a5", "Col6a6", "Col7a1", "Col8a1", "Col8a2",
+        "Col9a1", "Col9a2", "Col9a3", "Colec10", "Colec11", "Colec12",
+        "Colgalt1", "Colgalt2", "Colq"
+      )
+      # Obtained using
+      # sce_dm %>% rownames() %>% { (.)[stringr::str_detect(., "^Col")] } %>% sort()
+    ),
+
+    # Mitochondrial
+    mt = list(
+      name = "Mitochondrial",
+      genes = c(
+        "mt-Atp6", "mt-Atp8", "mt-Co1", "mt-Co2", "mt-Co3", "mt-Cytb",
+        "mt-Nd1", "mt-Nd2", "mt-Nd3", "mt-Nd4", "mt-Nd4l", "mt-Nd5", "mt-Nd6"
+      )
+    ),
+    # Obtained using (e.g.)
+    # sce_dm %>% rownames() %>% { (.)[stringr::str_detect(., "^mt-")] } %>% sort()
+
+    air = list(
+      name = "Aerobic respiration",
+      genes = c(
+        # GO:1903715 (regulation of aerobic respiration)
+        # http://www.informatics.jax.org/vocab/gene_ontology/GO:1903715
+        c("Actn3", "Akt1", "Bnip3", "Cbfa2t3", "Hif1a", "Ide", "Nop53", "Shmt2", "Trpv4", "Vcp"),
+
+        # GO:0009060 (aerobic respiration) minus GO:1903715 and minus 'mt-Co3'
+        # http://www.informatics.jax.org/vocab/gene_ontology/GO:0009060
+        c("Aco1", "Aco2", "Adsl", "Afg1l", "Atp5f1d", "Bloc1s1", "Cat", "Cox10", "Cox4i1", "Cox4i2", "Cox5a", "Cox5b", "Cox6a1", "Cox6a2", "Cox7c", "Cs", "Csl", "Cycs", "Cyct", "Dhtkd1", "Dlat", "Dlst", "Fh", "Fxn", "Idh1", "Idh2", "Idh3a", "Idh3b", "Idh3g", "Ireb2", "Mdh1", "Mdh1b", "Mdh2", "Mtco1", "Mtfr1", "Mtfr1l", "Mtfr2", "Mtnd1", "Mtnd4", "Mup1", "Mup11", "Mup2", "Mup3", "Mup4", "Mup5", "Mup6", "Ndufs4", "Ndufs7", "Ndufs8", "Ogdh", "Ogdhl", "Oxa1l", "Pank2", "Pdha1", "Pdha2", "Pdhb", "Proca1", "Q8BPC6", "Sdha", "Sdhaf2", "Sdhb", "Sdhc", "Sdhd", "Sirt3", "Sucla2", "Suclg1", "Suclg2", "Ucn", "Uqcr10", "Uqcrb", "Uqcrh")
+      )
+    ),
+    fib_mig = list(
+      name = "Reg. fib. mig.",
+      genes = c(
+        # GO:0010762 (regulation of fibroblast migration)
+        # http://www.informatics.jax.org/vocab/gene_ontology/GO:0010762
+        c("Acta2", "Actr3", "Adipor2", "Ager", "Akap12", "Akt1", "Appl1", "Appl2", "Arhgap4", "Bag4", "Braf", "Cln3", "Coro1c", "Cygb", "Ddr2", "Dmtn", "Fer", "Fgf2", "Fgfr1", "Gna12", "Has1", "Hyal2", "Itgb1", "Itgb1bp1", "Itgb3", "MACIR", "Mmp1a", "Mta2", "Pak1", "Pak3", "Prkce", "Prr5l", "Ptk2", "Rac1", "Rcc2", "Rffl", "Sdc4", "Slc8a1", "Tgfb1", "Thbs1", "Tsc2", "Uts2", "Wdpcp")
+      )
+    ),
+    glycolysis = list(
+      name = "Anaerobic glycolysis",
+      genes = c(
+        # GO:0006096 (glycolytic process / anaerobic glycolysis)
+        # http://www.informatics.jax.org/vocab/gene_ontology/GO:0006096
+        c("Actn3", "Adpgk", "Aldoa", "Aldoart1", "Aldoart2", "Aldob", "Aldoc", "App", "Bpgm", "Cbfa2t3", "Ddit4", "Dhtkd1", "Eif6", "Eno1", "Eno2", "Eno3", "Eno4", "Entpd5", "Ep300", "Esrrb", "Fbp1", "Foxk1", "Foxk2", "Gale", "Galk1", "Galt", "Gapdh", "Gapdhs", "Gck", "Git1", "Gm10358", "Gm11214", "Gm12117", "Gm15294", "Gm3839", "Gpd1", "Gpi", "Hdac4", "Hif1a", "Hk1", "Hk2", "Hk3", "Hkdc1", "Htr2a", "Ier3", "Ifng", "Igf1", "Il3", "Ins2", "Insr", "Jmjd8", "Khk", "Mif", "Mlxipl", "Mpi", "Mtch2", "Myc", "Myog", "Ncor1", "Nupr1", "Ogdh", "Ogt", "P2rx7", "Pfkfb2", "Pfkl", "Pfkm", "Pfkp", "Pgam1", "Pgam2", "Pgk1", "Pgk2", "Pklr", "Pkm", "Ppara", "Ppargc1a", "Prkaa1", "Prkaa2", "Prkag2", "Prkag3", "Prxl2c", "Psen1", "Sirt6", "Slc2a6", "Slc4a1", "Slc4a4", "Stat3", "Tigar", "Tkfc", "Tpi1", "Trex1", "Zbtb20", "Zbtb7a")
+      )
+    )
+  )
+```
+
+##### Collector of genes from the genesets of interest
+
+```{r}
+# Use a function because the list may change
+get_goi_genes <- function() {
+  goi %>%
+    lapply(as.data.frame) %>%
+    dual(base::rbind) %>%
+    pull(genes) %>%
+    unique()
+}
+```
+
+```{r}
+get_goi_genes()[1:7] %>%
+  c("...") %>%
+  t() %>%
+  kable()
+```
+
+##### Inferring gene set from symbol
+
+```{r}
+# Return a vector `goi_set` indicating the gene set for each `symbol`
+symbol2goiset <- function(genes) {
+  df <- data.frame(symbol = genes, goi_set = "Other")
+
+  for (goi in goi) {
+    df %<>% mutate(goi_set = if_else(symbol %in% goi$genes, goi$name, goi_set))
+  }
+
+  df %>% pull(goi_set, symbol)
+}
+```
+
+##### Function to show gene info
+
+```{r}
+show_gene_info_table <- function(df) {
+  df$symbols # need this column
+
+  df %>%
+    mutate(role = symbol2role(symbol)) %>%
+    mutate(goi_set = symbol2goiset(symbol)) %>%
+    mutate(gene_id = symbol2geneid(symbol)) %>%
+    merge(gene.summary$mm, all.x = TRUE, by = "gene_id", sort = FALSE) %>%
+    mutate(description = if_else(is.na(summary), description, paste0("<details>", "<summary>", description, "</summary>", summary, "</details>"))) %>%
+    mutate(description = paste0("<span style='font-size:70%'>", description, "</span>")) %>%
+    select(-summary) %>%
+    mutate(symbol = as.link(symbol)) %>%
+    DT::datatable(rownames = NULL, escape = FALSE, width = "100%")
+}
+```
+
+```{r}
+get_goi_genes() %>%
+  sample(size = 3) %>%
+  data.frame(symbol = .) %>%
+  rbind("...") %>%
+  show_gene_info_table()
+```
+
+##### Plot from PCA
+
+```{r}
+# TODO: normalize with edgeR?
+# Plots the PCA, showing the expression of genes
+show_goi_pca <- function(sce, genes, group.by = "celltype", colors = ramp(as.character(sce@colData[[group.by]]))) {
+  cbind(
+    # Reduced dim coordinates
+    sce@int_colData$reducedDims$PCA %>%
+      as.data.frame(row.names = colnames(sce)) %>%
+      select(x = PC1, y = PC2),
+    # Metadata
+    sce@colData %>%
+      as.data.frame(row.names = colnames(sce)) %>%
+      select(celltype = all_of(group.by)),
+    # Expression data for genes-of-interest
+    sce@assays@data$counts %>%
+      log1p() %>%
+      `[`(genes[genes %in% rownames(.)], ) %>%
+      t()
+  ) %>%
+    # Make long table
+    reshape2::melt(
+      # Keep as separate columns:
+      id.vars = c("x", "y", "celltype"),
+      # These columns will be stacked, in a column with this name:
+      measure.vars = genes, variable.name = "symbol"
+    ) %>%
+    # Plot
+    ggplot(aes(x = x, y = y, color = celltype)) +
+    geom_point(aes(size = value), alpha = 0.4) +
+    scale_color_manual(values = colors, breaks = gglast(colour)) + 
+    # theme_void() +
+    theme(
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+    ) +
+    labs(color = group.by, size = "Expression") +
+    facet_wrap(vars(symbol))
+}
+```
+
+##### Example
+
+```{r}
+get_goi_genes() %>%
+  mock_sce(genes = ., ncells = 77) %>%
+  scater::logNormCounts() %>%
+  scater::runPCA() %>%
+  show_goi_pca(goi$pvf$genes, group.by = "Cell_Cycle", colors = list(`G0` = "Red", `G1` = "Blue", `G2M` = "Orange", `S` = "DarkGreen", `Dead` = "Black"))
+```
+
+#### Aggregate by sample group
+
+```{r}
+# Aggregates genes by `group.by` for each geneset from `goi`
+goi_agg_by_group <- function(sce, group.by = "celltype") {
+  goi %>%
+    lapply(function(goi) {
+      (dual(rbind))(as.list(group.by) %>% lapply(function(group.by) {
+        if (any(goi$genes %in% rownames(sce))) {
+          cbind(
+            # Metadata
+            sce@colData %>%
+              as.data.frame(row.names = colnames(sce)) %>%
+              select(subgroup = all_of(group.by)),
+            # Expression data for genes-of-interest
+            sce %>%
+              scater::logNormCounts() %>%
+              SingleCellExperiment::logcounts() %>%
+              take_rows(goi$genes) %>%
+              t()
+          ) %>%
+            # Aggregate by sample
+            group_by(subgroup) %>%
+            summarise(across(everything(), mean)) %>%
+            # Make long table
+            reshape2::melt(
+              # Keep as separate columns:
+              id.vars = c("subgroup"),
+              # Other columns will be stacked, in a column with this name:
+              variable.name = "symbol"
+              # A column `value` contains their values
+            ) %>%
+            mutate(group = group.by) %>%
+            mutate(goi_set = goi$name)
+        }
+      }))
+    }) %>%
+    # Relabel the elements of the list
+    dual(rbind) %>%
+    split(.$goi_set)
+
+  # cf.
+  # https://stackoverflow.com/questions/33775239/emulate-split-with-dplyr-group-by-return-a-list-of-data-frames
+}
+```
+
+##### Example
+
+```{r}
+get_goi_genes() %>%
+  mock_sce(genes = ., ncells = 77) %>%
+  goi_agg_by_group(group.by = "Treatment") %>%
+  lapply(head)
+```
+
+##### Aggregate by gene set
+
+```{r}
+# For each cell, aggregate each gene set
+# Returns a sample x geneset table (with additional metadata columns)
+goi_agg_by_genes <- function(sce) {
+  cbind(
+    # Sample metadata
+    sce@colData %>%
+      as.data.frame() %>%
+      select(any_of(c("cluster", "celltype", "group", "subgroup", "Group"))),
+
+    # Mean expression for genes-of-interest
+    lapply(goi, function(goi) {
+      list() %>% within({
+        assign(
+          goi$name,
+          sce@assays@data$counts %>%
+            log1p() %>%
+            take_rows(goi$genes) %>%
+            colMeans()
+        )
+      })
+    }),
+
+    # Library size
+    data.frame(lib.size = sce@assays@data$counts %>% colSums()),
+
+    # Reduced dim coordinates
+    sce %>%
+      scater::logNormCounts() %>%
+      scater::runPCA() %>%
+      SingleCellExperiment::reducedDim("PCA") %>%
+      as.data.frame() %>%
+      select(x = PC1, y = PC2, z = PC3)
+  )
+}
+```
+
+##### Example
+
+```{r}
+get_goi_genes() %>%
+  mock_sce(genes = ., ncells = 77) %>%
+  goi_agg_by_genes() %>%
+  head() %>%
+  DT::datatable(width = "100%", options = list(scrollX = TRUE))
+```
+
+
+#### Kidney fibroblasts
+
+This is a set of differential genes
+in kidney fibroblast activation
+from [Deng et al., 2021](https://doi.org/10.7717/peerj.10926).
+
+##### Load
+
+```{r}
+fb_genes_si7 <- path_to("*/Deng-Wei-2021/*/SI7.*.gz") %>% from_tsv()
+# fb_genes_si8 <- path_to("*/Deng-Wei-2021/*/SI8.*.gz") %>% from_tsv()
+```
+
+```{r}
+show_tbl <- function(tbl) {
+  tbl %<>%
+    ind2col("symbol") %>%
+    mutate(symbol = as.link(symbol)) %>%
+    select(symbol, logFC)
+
+  tbl %>%
+    DT::datatable(escape = FALSE) %>%
+    DT::formatSignif(colnames(tbl %>% select(-symbol)), digits = 3)
+}
+```
+
+##### SI7
+
+The DE table from [SI7](https://peerj.com/articles/10926/#supplemental-information)
+extracted from [GSE121190](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE121190).
+
+```{r}
+fb_genes_si7 %>%
+  filter(adj.P.Val < 1e-2) %>%
+  show_tbl()
+```
+
+```{r, include=FALSE}
+# The DE table from [SI8](https://peerj.com/articles/10926/#supplemental-information)
+# extracted from [GSE62732](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE62732).
+# fb_genes_si8 %>% show_tbl()
+```
+
+
+#### Daneman, 2021
+
+The list of genes is from
+[Dorrier-Aran-...-Daneman, 2021](https://www.nature.com/articles/s41593-020-00770-9),
+[Extended Data Fig. 4](https://www.nature.com/articles/s41593-020-00770-9/figures/10).
+
+##### Add clusters to genes of interest
+
+```{r}
+if (!("c0" %in% names(goi))) {
+  goi %<>%
+    c(
+      list(
+        `0` = c("Col1a2", "Bgn", "Col3a1", "Col8a1", "Igf1", "Ifitm1", "Col1a1", "Cfh", "Sparc", "B2m"),
+        `1` = c("Apod", "Trf", "Dcn", "Gsn", "Gpc3", "Tgfbi", "Ccl11", "Smoc2", "Lum", "Cst3"),
+        `2` = c("Lgals1", "Timp1", "Rpl41", "Rps18", "Rps12", "Col4a1", "Cxcl10"),
+        `3` = c("Junb", "Fosb", "Fos", "Ptn", "Igfbp2", "Klf4", "Clec3b", "Apoe", "Rbp4", "Vtn"),
+        `4` = c("Rbp1", "Fth1", "Aldh1a2", "Fn1", "Igfbp3", "Slc7a11", "Ptgds", "Timp3", "Igfbp5"),
+        `5` = c("Ptch1", "Igfbp6", "Tmsb4x", "S100a6", "Igfbp7", "Mgp", "Saa1"),
+        `6` = c("Itih5", "Spp1", "Klf2", "Ubb", "Jund", "Mt1"),
+        `7` = c("Rgs5", "Acta2", "Myl9", "Gm13889", "Tagln", "Tpm2", "Actb")
+      ) %>%
+        stack() %>%
+        mutate(cluster = paste0("c", ind), name = paste0("Dm #", ind)) %>%
+        split(.$cluster) %>%
+        lapply(function(c) list(name = unique(c$name), genes = c$values))
+    )
+}
+```
+
+##### Visualizing in heatmap
+
+```{r}
+heatmap <- function(sce, colors = NULL, anno_col = NULL, anno_row = NULL, ...) {
+  # `colors` should be like list(`negative` = "Blue", `positive` = "Red", ...)
+  colors %<>% c(NULL) %>% unlist()
+
+  if (!is.null(anno_row)) {
+    stopifnot(assertthat::are_equal(rownames(sce), rownames(anno_row)))
+  }
+
+  if (!is.null(anno_col)) {
+    stopifnot(assertthat::are_equal(colnames(sce), rownames(anno_col)))
+  }
+
+  anno_col %<>%
+    list(
+      sce@colData %>%
+        as.data.frame() %>%
+        select(any_of(c("celltype", "subgroup", "Group", "cluster", "Treatment")))
+    ) %>%
+    dual(cbind)
+
+  # print(anno_col %>% as.list() %>% lapply(\(x) if (all(x %in% names(colors))) colors[unique(as.character(x))] else ramp(x)))
+
+  sce %>%
+    SingleCellExperiment::counts() %>%
+    log1p() %>%
+    {
+      # (.) - rowMeans(.)
+      # (.) / rowSums(.)
+    } %>%
+    pheatmap::pheatmap(
+      show_colnames = FALSE,
+      treeheight_row = 0,
+      treeheight_col = 0,
+      cluster_rows = FALSE,
+      fontsize = 6,
+      color = grDevices::colorRampPalette(c("black", "yellow"))(10),
+      annotation_col = anno_col,
+      annotation_row = anno_row,
+      annotation_colors = c(
+        anno_row %>% as.list() %>% lapply(ramp),
+        anno_col %>% as.list() %>% lapply(\(x) if (all(x %in% names(colors))) colors[unique(as.character(x))] %>% unlist() else ramp(x))
+      ),
+      ...
+    )
+}
+```
+
+```{r}
+show_dm_heatmap <- function(sce, anno_row = NULL, ...) {
+  dm_genes <-
+    goi[grep("c[0-9]", goi %>% names())] %>%
+    lapply(as.data.frame) %>%
+    dual(rbind) %>%
+    pull(name, genes)
+
+  if (!is.null(anno_row)) {
+    stopifnot(assertthat::are_equal(rownames(sce), rownames(anno_row)))
+  }
+
+  anno_row %<>%
+    take_rows(names(dm_genes))
+
+  sce %<>%
+    take_rows(names(dm_genes))
+
+  anno_row %<>%
+    list(data.frame(dm.cluster = dm_genes[rownames(sce)])) %>%
+    dual(cbind)
+
+  heatmap(sce, anno_row = anno_row, ...)
+}
+```
+
+```{r, dpi=36}
+unlist(goi[grep("c[0-9]", goi %>% names())]) %>%
+  mock_sce(ncells = 77) %>%
+  {
+    (.)[, order((.)$celltype)]
+  } %>%
+  show_dm_heatmap(
+    colors = colors,
+    cluster_cols = FALSE,
+    anno_col = data.frame(x = ((1:ncol(.)) %% 2), row.names = colnames(.)),
+    anno_row = data.frame(y = ((1:nrow(.)) %% 2), row.names = rownames(.))
+  )
+```
+
+```{r, include=FALSE}
+# THIS SHOULD BE UNNECESSARY
+agg_dm_genes <- function(sce, group.by = "celltype") {
+  dm_genes <-
+    goi[grep("c[0-9]", goi %>% names())]
+
+  genes <-
+    intersect(rownames(dm_genes), rownames(sce))
+
+  sce %>%
+    `[`(genes, ) %>%
+    SingleCellExperiment::counts() %>%
+    log1p() %>%
+    as.data.frame() %>%
+    # Aggregate by cluster
+    cbind(dm_genes[genes, , drop = FALSE]) %>%
+    group_by(cluster) %>%
+    summarise(across(everything(), mean)) %>%
+    by_col1() %>%
+    # Aggregate by celltype
+    t() %>%
+    cbind(sce@colData %>%
+      as.data.frame() %>%
+      select(celltype = !!rlang::sym(group.by))) %>%
+    group_by(celltype) %>%
+    summarise(across(everything(), mean)) %>%
+    # Reshape as long table
+    reshape2::melt(id = "celltype") %>%
+    rename("cluster" = "variable")
+}
+```
+
+
+
+#### All GoI
+
+The following table shows all the "genes of interest".
+
+```{r}
+get_goi_genes() %>%
+  data.frame(symbol = .) %>%
+  show_gene_info_table()
+```
+
+
+
+### Analysis tools {.tabset}
+
+#### Dummy dataset
+
+Small dataset to run through quickly.
+
+```{r}
+sce_dummy <- readRDS(path_to("*/*/sce_dummy.rds"))
+# Made with:
+# load_dataset$dm(size = 77) %>% keep_only_goi() %>% saveRDS(file = "sce_dummy.rds")
+```
+
+```{r, echo=FALSE}
+print(sce_dummy)
+```
+
+```{r}
+data.frame(
+  x = sce_dummy@assays@data$counts %>% colSums(),
+  subgroup = sce_dummy$subgroup
+) %>%
+  ggplot(aes(x = x, color = subgroup)) +
+  scale_color_manual(values = colors[gglast(colour)]) +
+  geom_density()
+```
+
+#### Scater
+
+##### Computation of red. dim.
+
+```{r}
+scater_attach <- function(sce) {
+  scater::addPerCellQC(
+    x = sce,
+    subsets = list(Mito = grep("mt-", rownames(sce)))
+  ) %>%
+    scater::logNormCounts() %>%
+    scater::runPCA(name = "PCA", ncomponents = 20) %>%
+    scater::runTSNE(perplexity = 10, dimred = "PCA") %>%
+    scater::runUMAP()
+}
+```
+
+```{r}
+sce_dummy %<>% scater_attach()
+```
+
+```{r}
+sce_dummy %>%
+  scater::makePerCellDF() %>%
+  head(3) %>%
+  DT::datatable(width = "100%")
+```
+
+##### Plotting (2d)
+
+```{r}
+scater_show <- function(sce, color.by = "celltype", colors = NULL) {
+  items <- sce@colData[[color.by]]
+  
+  colors <- 
+    if (all(items %in% names(colors))) colors[items] else ramp(items, palette = "Set 2")
+
+  sce %>%
+    {
+      function(which_dimred) {
+        suppressMessages(
+          scater::plotReducedDim(
+            dimred = which_dimred,
+            object = (.),
+            colour_by = color.by
+          ) +
+            scale_color_manual(values = colors) +  # no need for `breaks`
+            labs(color = color.by) +
+            guides(color = guide_legend(override.aes = list(size = 2, alpha = 1))) +
+            theme(
+              axis.text = element_blank(),
+              axis.ticks = element_blank()
+            )
+        )
+      }
+    } %>%
+    {
+      gridExtra::arrangeGrob((.)("PCA"), (.)("TSNE"), (.)("UMAP"), nrow = 3)
+    }
+}
+```
+
+```{r}
+sce_dummy %>%
+  scater_show(color.by = "subgroup", colors = colors) %>%
+  gridExtra::grid.arrange()
+```
+
+##### Plotting (3d)
+
+Template, not for direct use.
+
+```{r}
+pca3d_template <- function(sce, color.by = "celltype", colors = ramp(sce@colData[[color.by]])) {
+  data.frame(
+    color_group = sce@colData[[color.by]],
+    lib.size = sce@assays@data$counts %>% colSums(),
+    SingleCellExperiment::reducedDim(sce, "PCA") %>%
+      as.data.frame() %>%
+      select(PC1, PC2, PC3)
+  ) %>%
+    group_by(color_group) %>%
+    sample(size = 30, replace = TRUE) %>%
+    ungroup() %>%
+    # print() %>%
+
+    plotly::plot_ly() %>%
+    plotly::add_markers(
+      x = ~PC1, y = ~PC2, z = ~PC3,
+      marker = list(size = 2, opacity = 1),
+      color = ~color_group,
+      colors = colors
+    ) %>%
+    plotly::layout(
+      scene = list(
+        xaxis = list(title = "PC1", showticklabels = FALSE),
+        yaxis = list(title = "PC2", showticklabels = FALSE),
+        zaxis = list(title = "PC3", showticklabels = FALSE)
+      )
+    )
+}
+```
+
+```{r}
+sce_dummy %>% pca3d_template(color.by = "subgroup", colors = colors)
+```
+
+#### Cell cycle
+
+##### Cell cycle genes
+
+```{r}
+default_cyclic_genes <-
+  # Convert the "cyclic genes" of `Revelio` from Hs to Mm
+  Revelio::revelioTestData_cyclicGenes %>%
+  lapply(function(genes) {
+    merge(
+      x = data.frame(symbol.x = genes),
+      y = homology(taxid$hs, taxid$mm),
+      by = "symbol.x",
+      all.x = TRUE
+    ) %>%
+      pull(symbol.y) %>%
+      sort(na.last = TRUE)
+  })
+```
+
+```{r}
+default_cyclic_genes %>%
+  as.data.frame() %>%
+  head() %>%
+  rbind("...") %>%
+  kable()
+```
+
+##### Computation of cell cycle phase
+
+The DC1-DC2 plane is supposed to show
+a circle reflecting the cell cycle
+(cf. [Fig 1](https://pubmed.ncbi.nlm.nih.gov/33205894/#&gid=article-figures&pid=figure-1-uid-0) in [Schwabe et al., 2020](https://doi.org/10.15252/msb.20209946)).
+
+```{r}
+cell_cycle <- function(sce, batch.by = NA, cyclic_genes = default_cyclic_genes) {
+  list(
+    counts = sce@assays@data$counts,
+    orig.id = colnames(sce),
+    batch = if (is.na(batch.by)) "cell" else paste0(sce@colData[[batch.by]], "_")
+  ) %>%
+    within({
+      colnames(counts) <- paste0(batch, 1:ncol(counts))
+      orig.id <- data.frame(old = orig.id, new = colnames(counts)) %>% pull(old, new)
+    }) %>%
+    with({
+      counts %>%
+        Revelio::createRevelioObject(cyclicGenes = cyclic_genes, lowernGeneCutoff = 0) %>%
+        Revelio::getCellCyclePhaseAssignInformation() %>%
+        Revelio::getPCAData() %>%
+        Revelio::getOptimalRotation() %>%
+        list(cyclic = .) %>%
+        with({
+          assertthat::assert_that(all(
+            rownames(cyclic@cellInfo) == colnames(cyclic@transformedData$pca$data)
+          ))
+
+          cbind(
+            cyclic@transformedData$pca$data %>% `[`(1:min(5, nrow(.)), ) %>% t(),
+            cyclic@transformedData$dc$data %>% `[`(1:min(5, nrow(.)), ) %>% t(),
+            cyclic@cellInfo
+          )
+        }) %>%
+        data.frame(row.names = orig.id[rownames(.)])
+    }) %>%
+    cbind(as.data.frame(sce@colData)[rownames(.), , drop = FALSE])
+}
+```
+
+##### 2d plotting of cell cycle "trajectory"
+
+```{r}
+cell_cycle_plot2d <- function(cco, colors = ramp(cco$ccPhase)) {
+  cco %>%
+    ggplot(aes(x = DC1, y = DC2, color = ccPhase)) +
+    geom_point(size = 3, stroke = 1) +
+    scale_color_manual(values = colors, breaks = gglast(colour))
+}
+```
+
+##### Test on Revelio data
+
+```{r, cache=TRUE}
+cco_revelio <-
+  cell_cycle(
+    Revelio::revelioTestData_rawDataMatrix %>%
+      make_sce(
+        counts = .,
+        coldata = data.frame(
+          x = colnames(.) %>% strsplit("_") %>% dual(rbind),
+          row.names = colnames(.)
+        ) %>% select(batch = x.1)
+      ),
+    batch.by = "batch",
+    cyclic_genes = Revelio::revelioTestData_cyclicGenes
+  )
+```
+
+```{r, dpi=36}
+cco_revelio %>%
+  ggplot(aes(x = DC1, y = DC2, color = ccPhase, shape = batch)) +
+  geom_point(size = 3, stroke = 1) +
+  scale_color_manual(values = colors, breaks = gglast(colour))
+```
+
+##### Test on mock data
+
+```{r, cache=TRUE}
+cco_mock <-
+  unlist(as.list(default_cyclic_genes)) %>%
+  {
+    (.)[!is.na(.)]
+  } %>%
+  mock_sce(ncells = 33) %>%
+  cell_cycle()
+```
+
+```{r, dpi=36}
+cco_mock %>%
+  ggplot(aes(x = DC1, y = DC2, color = celltype, fill = ccPhase)) +
+  geom_point(shape = 21, size = 5) +
+  ggplot2::scale_color_manual(values = colors, breaks = gglast(colour)) +
+  ggplot2::scale_fill_manual(values = colors, breaks = gglast(fill))
+```
+
+##### 3d plotting of cell cycle "trajectory" with plotly
+
+```{r}
+cell_cycle_plot3d <- function(cco, colors = ramp(cco$ccPhase)) {
+  cco %>%
+    with({
+      plotly::plot_ly() %>%
+        plotly::add_markers(
+          x = DC1, y = DC2, z = DC3,
+          size = 4,
+          color = ccPhase,
+          colors = colors
+        )
+    })
+}
+```
+
+##### Test 3d plot
+
+```{r}
+cco_mock %>% cell_cycle_plot3d()
+```
+
+##### Alternative 3d plotting with rgl
+
+```{r, message=FALSE}
+cco_mock %>%
+  with({
+    rgl::plot3d(DC1, DC2, DC3, size = 3, type = "s", col = ramp(ccPhase)[ccPhase])
+    rgl::rglwidget()
+  })
+```
+
+
+
+#### DE
+
+##### Computation of DE genes
+
+```{r}
+deseq <- function(sce, design) {
+  sce %>%
+    DESeq2::DESeqDataSet(design = design) %>%
+    DESeq2::estimateSizeFactors(type = "poscounts") %>%
+    DESeq2::DESeq(quiet = TRUE, fitType = "local") %>%
+    DESeq2::results() %>%
+    as.data.frame() %>%
+    select(base = baseMean, lfc = log2FoldChange, p = pvalue) %>%
+    mutate(base = log1p(base)) %>%
+    tidyr::drop_na() %>%
+    mutate(p = p.adjust(p, "BH"), p.unadj = p) %>%
+    ind2col("symbol") %>%
+    list(table = ., design = design)
+}
+```
+
+```{r}
+edger <- function(sce, design) {
+  sce %>%
+    edgeR::estimateDisp(robust = TRUE) %>%
+    # edgeR::calcNormFactors(method = "TMM") %>%
+    # edgeR::estimateGLMTagwiseDisp(design = design) %>%
+    edgeR::glmFit(design = model.matrix(design, data = sce@colData)) %>%
+    edgeR::glmLRT(coef = 2) %>%
+    `$`(table) %>%
+    select(base = logCPM, lfc = logFC, p = PValue, LR = LR) %>%
+    tidyr::drop_na() %>%
+    mutate(p = p.adjust(p, "BH"), p.unadj = p) %>%
+    ind2col("symbol") %>%
+    list(table = ., design = design)
+}
+```
+
+```{r}
+# Hacky fctn to determine colors for `lfc > 0` and `lfc < 0`
+lfc_colors <- function(sce, design, colors) {
+  f <- terms(design) %>% attr("factors")
+  stopifnot((nrow(f) == 1) && (ncol(f) == 1))
+
+  f <- sce@colData[[f %>% colnames()]]
+
+  cc <- colors[f %>% levels()]
+  cc <- c(cc[[1]], (rowMeans(col2rgb(cc[-1])) / 255) %>% as.list() %>% dual(rgb))
+
+  (. %>% (colorRamp(cc)) %>% RGB())
+}
+```
+
+```{r}
+compute_de <- function(sce, design) {
+  list(
+    deseq = suppressMessages(deseq(sce, design)),
+    edger = suppressMessages(edger(sce, design))
+  ) %>%
+    with({
+      list(
+        table = rbind(
+          deseq$table %>%
+            select(symbol, base, lfc, p) %>%
+            mutate(src = "DESeq2"),
+          edger$table %>%
+            select(symbol, base, lfc, p) %>%
+            mutate(src = "edgeR")
+        ),
+        design = design
+      )
+    }) %>%
+    within({
+      # Attach LFC color (not very important)
+      table %<>%
+        group_by(src) %>%
+        mutate(color = (lfc_colors(sce, design, colors))(percent_rank(lfc))) %>%
+        ungroup()
+    })
+}
+```
+
+##### Example:
+
+```{r}
+sce_dummy.de <- sce_dummy %>% compute_de(~group)
+```
+
+```{r}
+sce_dummy.de$table %>%
+  head() %>%
+  rbind("...") %>%
+  kable()
+```
+
+##### Pretty-printing 
+
+```{r}
+show_de_table <- function(.) {
+  (.) %>%
+    group_by(src) %>%
+    slice_min(p, n = 777) %>%
+    slice_max(abs(lfc), n = 777) %>%
+    ungroup() %>%
+    merge(
+      y = org.Mm.eg.db::org.Mm.egSYMBOL2EG %>% as.data.frame(),
+      all.x = TRUE,
+      by = "symbol"
+    ) %>%
+    merge(
+      y = gene.summary$mm %>% select(gene_id, description, summary),
+      all.x = TRUE,
+      by = "gene_id"
+    ) %>%
+    select(-any_of("gene_id")) %>%
+    select(-any_of("color")) %>%
+    # Role: TF, Rec, Lig, etc
+    mutate(role = symbol2role(symbol)) %>%
+    mutate(symbol = as.link(symbol)) %>%
+    mutate(description = if_else(is.na(summary), description, paste0("<details>", "<summary>", description, "</summary>", summary, "</details>"))) %>%
+    select(-summary) %>%
+    mutate(description = paste0("<span style='font-size: 70%;'>", description, "</span>")) %>%
+    DT::datatable(escape = FALSE) %>%
+    DT::formatSignif(c("base", "lfc", "p"), digits = 3)
+}
+```
+
+##### Example
+
+```{r}
+sce_dummy.de$table %>%
+  group_by(src) %>%
+  slice_min(p, n = 33) %>%
+  ungroup() %>%
+  show_de_table()
+```
+
+##### As heatmap
+
+```{r}
+show_de_heatmap <- function(sce, de_table, ...) {
+  top <- de_table %>%
+    group_by(lfc > 0) %>%
+    slice_min(p, n = 33, with_ties = FALSE) %>%
+    ungroup() %>%
+    arrange(lfc) %>%
+    select(symbol, lfc, p) %>%
+    mutate(`-log10(p)` = -log10(p)) %>%
+    by_col1() %>%
+    `[`(rownames(.) %in% rownames(sce), )
+
+  sce[rownames(top), ] %>%
+    heatmap(anno_row = top, ...)
+}
+```
+
+##### Example
+
+```{r, dpi=36}
+sce_dummy %>%
+  show_de_heatmap(sce_dummy.de$table %>% filter(src == "edgeR"), colors = colors)
+```
+
+##### Volcano plot
+
+```{r}
+show_de_volcano <- function(de_table) {
+  de_table %<>%
+
+    mutate(goi_set = symbol2goiset(symbol)) %>%
+    group_by(src) %>%
+    arrange(lfc) %>%
+    mutate(is_out = (lfc <= max(head(lfc, 5))) | (min(tail(lfc, 5)) <= lfc)) %>%
+    ungroup() %>%
+    mutate(label = ifelse(is_out, symbol, ""))
+
+  ggplot(de_table, aes(x = lfc, y = -log10(p))) +
+
+    # All genes
+    geom_point(color = "gray") +
+
+    # Color by geneset
+    geom_point(
+      data = de_table %>% filter(goi_set != "Other"),
+      aes(x = lfc, y = -log10(p), color = goi_set)
+    ) +
+    scale_color_manual(values = ramp(de_table$goi_set)) +
+    labs(color = "Gene set") +
+
+    # Label outliers
+    geom_text(aes(label = label), hjust = -0.3, position = position_jitter(h = 4), size = 3, color = "blue") +
+    facet_grid(. ~ src, scale = "free") +
+    theme(legend.position = "bottom")
+}
+```
+
+##### Example
+
+```{r, dpi=36}
+sce_dummy.de$table %>% show_de_volcano()
+```
+
+##### Expression vs LFC plot
+
+```{r}
+show_de_basecamp <- function(.) {
+  (.) %>%
+    mutate(goi_set = symbol2goiset(symbol)) %>%
+    group_by(goi_set) %>%
+    arrange(lfc) %>%
+    mutate(is_out = (lfc <= max(head(lfc, 5))) | (min(tail(lfc, 5)) <= lfc)) %>%
+    mutate(is_out = is_out | (min(tail(sort(base), 5)) <= base)) %>%
+    ungroup() %>%
+    mutate(label = ifelse(is_out, symbol, "")) %>%
+    ggplot(aes(x = lfc, y = base)) +
+    geom_point(data = (.), alpha = 0.5, size = 1, color = "grey") +
+    geom_point(color = "black", size = 0.5) +
+    scale_y_log10() +
+    geom_text(aes(label = label), hjust = -0.3, position = position_jitter(h = 0.01), size = 2, color = "blue") +
+    facet_wrap(~goi_set, scale = "free_y") +
+
+    # Note: put labs(x = "..") outside
+    labs(y = "Expression") +
+    theme(
+      legend.position = "bottom",
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+    )
+}
+```
+
+##### Example
+
+```{r, dpi=36}
+sce_dummy.de$table %>%
+  show_de_basecamp() +
+  labs(x = "Condition1 <-- LFC --> Condition2")
+```
+
+
+##### Comparing LFC of DESeq2 vs edgeR
+
+```{r}
+show_de_cmp_lfc <- function(table) {
+  merge(
+    table %>% filter(src == "DESeq2"),
+    table %>% filter(src == "edgeR"),
+    by = "symbol",
+    all = TRUE
+  ) %>%
+    # tidyr::replace_na(list(p.x = 0, p.y = 0)) %>%
+    tidyr::drop_na() %>%
+    mutate(sig.x = (p.x < quantile(p.x, 0.01))) %>%
+    mutate(sig.y = (p.y < quantile(p.y, 0.01))) %>%
+    mutate(sig = if_else(sig.x & sig.y, "Intersection", if_else(sig.x, "DESeq", if_else(sig.y, "edgeR", "")))) %>%
+    mutate(label = if_else(sig.x | sig.y, symbol, "")) %>%
+    {
+      ggplot((.) %>% filter(sig != ""), aes(x = lfc.x, y = lfc.y)) +
+        geom_point(data = (.) %>% filter(sig == ""), stroke = 0, alpha = 0.2) +
+        geom_point(aes(color = sig)) +
+        labs(x = "LFC by DESeq2", y = "LFC by edgeR", color = "Top %1 signif.") +
+        geom_text(aes(label = label, color = sig), hjust = -0.3, position = position_jitter(h = 0.05), size = 3, alpha = 0.8, show.legend = FALSE) +
+        geom_abline(slope = 1, intercept = 0, linetype = "dashed")
+    }
+}
+```
+  
+##### Example
+
+```{r, dpi=36}
+sce_dummy.de$table %>% show_de_cmp_lfc()
+```
+
+
+#### GO
+
+##### Computation
+
+```{r}
+compute_go <- function(de_table, n = 33) {
+  de_table %>%
+    mutate(direction = if_else(lfc > 0, "up", "dn")) %>%
+    group_by(direction) %>%
+    slice_min(p, n = n, with_ties = TRUE) %>%
+    slice_max(abs(lfc), n = n, with_ties = FALSE) %>%
+    split(.$direction) %>%
+    within({
+      f <- (function(x) x$symbol[1:5] %>% paste(collapse = ", "))
+      message(paste("Up:", f(up), "..."))
+      message(paste("Dn:", f(dn), "..."))
+      rm(f)
+    }) %>%
+    lapply(function(de_table) {
+      de_table %>%
+        # Get the Entrez IDs of our genes
+        mutate(gene_id = symbol2geneid(symbol)) %>%
+        pull(gene_id) %>%
+        # GO enrichment analysis
+        limma::goana(species = "Mm") %>%
+        ind2col("category") %>%
+        rename(p = P.DE, `#DE` = DE, `#cat` = N, GO = Ont, term = Term) %>%
+        # Limit selection
+        filter(p <= 0.05) %>%
+        arrange(p)
+    })
+}
+```
+
+##### Pretty-printing
+
+```{r}
+show_go_table <- function(.) {
+  (.) %>%
+    with({
+      rbind(
+        up %>% mutate(direction = "lfc_up"),
+        dn %>% mutate(direction = "lfc_down")
+      ) %>%
+        arrange(p)
+    }) %>%
+    mutate(category = if_else(grepl("^GO:", category), as.link(category), category)) %>%
+    mutate(category = paste0("<span style='white-space:nowrap;'>", category, "(", GO, ")", "</span>")) %>%
+    mutate(direction = if_else(grepl("lfc_u", direction), paste0("<span style='color:darkred'>", direction, "</span>"), direction)) %>%
+    mutate(direction = if_else(grepl("lfc_d", direction), paste0("<span style='color:darkgreen'>", direction, "</span>"), direction)) %>%
+    dplyr::select(any_of(c("category", "direction", "p", "#DE", "#cat", "term"))) %>%
+    DT::datatable(escape = FALSE, width = "100%") %>%
+    DT::formatSignif("p", digits = 3)
+}
+```
+
+##### Example
+
+```{r, cache=TRUE}
+sce_dummy.go <-
+  sce_dummy.de$table %>%
+  compute_go()
+```
+
+```{r}
+rbind(
+  sce_dummy.go$up %>% head(2),
+  sce_dummy.go$dn %>% head(2),
+  "..."
+) %>%
+  DT::datatable(escape = FALSE, width = "100%")
+```
+
+```{r}
+sce_dummy.go %>% show_go_table()
+```
+
+
+
+#### Misc
+
+##### Cosine similarity
+
+```{r}
+# If A and B are SingleCellExperiment-like, then `cosine` computes
+# the cosine similarity of samples of A against samples of B
+cosine <- function(A, B) {
+  A <- A@assays@data$counts
+  B <- B@assays@data$counts
+  ii <- intersect(rownames(A), rownames(B))
+  A <- t(as.matrix(A[ii, , drop = FALSE]))
+  B <- t(as.matrix(B[ii, , drop = FALSE]))
+  A <- A / sqrt(rowSums(A * A))
+  B <- B / sqrt(rowSums(B * B))
+  A %*% t(B)
+}
+```
+
+Example:
+
+```{r, dpi=36}
+cosine(
+  sce_dummy[, sce_dummy$subgroup == "healthy1"],
+  sce_dummy[, sce_dummy$subgroup == "healthy1"]
+) %>%
+  pheatmap::pheatmap()
+```
+
+
+#### Co-expression
+
+##### Hand-made
+
+```{r}
+coex <- function(sce) {
+  # Filter for the correlation matrix
+  f <- function(.) ((.) != 0)
+
+  sce %>%
+    SingleCellExperiment::counts() %>%
+    t() %>%
+    # stats::cor(method = "spearman") %>%
+    Hmisc::rcorr(type = "spearman") %>%
+    `$`(r) %>%
+    {
+      with(
+        (upper.tri(.) * (.)) %>% f() %>% which(arr.ind = TRUE) %>% as.data.frame(),
+        data.frame(a = rownames(.)[row], b = colnames(.)[col], w = (.)[cbind(row, col)])
+      )
+    }
+}
+```
+
+```{r}
+show_coex_graph <- function(coex_df, de_table, n = 77) {
+  coex_df %<>% as.data.frame()
+
+  # Note: the graph vertices are pulled from the de_table
+  # Only those occurring in coex_df$a or .$b are retained
+
+  stopifnot(!any(duplicated(de_table$symbol)))
+
+  # Color of vertex labels
+  # de_table %>% pull(color, symbol)
+
+  stopifnot(all(c("a", "b", "w") %in% colnames(coex_df)))
+
+  ex_graph <-
+    coex_df %>%
+    group_by(w > 0) %>%
+    mutate(color = ((1 + w / max(abs(w))) / 2)) %>%
+    slice_max(abs(w), n = n) %>%
+    ungroup() %>%
+    mutate(color = colorRamp(c("blue", "white", "red"))(color) %>% RGB(alpha = 0.2)) %>%
+    select(a, b, w, color) %>%
+    igraph::graph_from_data_frame(
+      directed = FALSE,
+      vertices = (
+        de_table %>%
+          filter((symbol %in% coex_df$a) | (symbol %in% coex_df$b)) %>%
+          select(symbol, color)
+      )
+    )
+
+  # Graphs based on OmniPath
+  graphs <- list(
+    tf = omnipath.tf,
+    lr = omnipath.lr,
+    ia = omnipath.in %>% 
+      anti_join(omnipath.tf, by = c("source", "target")) %>%
+      anti_join(omnipath.lr, by = c("source", "target"))
+  ) %>%
+    lapply(function(df) {
+      df %>%
+        mutate(sign = is_stimulation - is_inhibition) %>%
+        select(a = source_genesymbol, b = target_genesymbol, sign) %>%
+        filter(a %in% igraph::V(ex_graph)$name) %>%
+        filter(b %in% igraph::V(ex_graph)$name) %>%
+        # group_by(a, b) %>% summarize(sign = sum(sign)) %>%
+        filter(sign != 0) %>%
+        igraph::graph_from_data_frame(directed = TRUE)
+    }) %>%
+    within({
+      ex <- ex_graph
+    })
+
+  rm(ex_graph)
+  
+  # The interaction graph contains ligand-receptor; drop those
+  # "Cannot use an edge sequence from another graph":
+  #graphs$ia %<>% igraph::delete_edges(igraph::E(igraph::intersection(graphs$lr, graphs$ia)))
+
+  # for layouting
+  set.seed(43)
+
+  graph_layout <-
+    (
+      graphs$ex
+        # + igraph::as.undirected(graphs$tf)
+        # + igraph::as.undirected(graphs$lr)
+        + igraph::as.undirected(graphs$ia)
+    ) %>%
+    # igraph::layout_with_kk(dim = 2, kkconst = igraph::vcount(.)) %>%
+    igraph::layout_with_dh(maxiter = 33) %>%
+    # igraph::layout_with_lgl() %>%
+    # igraph::layout_with_fr(start.temp = 1e-1) %>%
+    as.data.frame() %>%
+    magrittr::set_colnames(c("x", "y")) %>%
+    magrittr::set_rownames(igraph::V(graphs$ex)$name)
+
+  graphs %>%
+    lapply(function(graph) {
+      list(graph = graph, pos = graph_layout) %>%
+        within({
+          # Edges as dataframe
+          E <-
+            graph %>%
+            igraph::get.edgelist() %>%
+            magrittr::set_colnames(c("a", "b")) %>%
+            as.data.frame()
+
+          # Attach segment data
+          segment <-
+            cbind(
+              take_rows(pos, E$a) %>% magrittr::set_colnames(c("x", "y")),
+              take_rows(pos, E$b) %>% magrittr::set_colnames(c("xend", "yend"))
+            ) %>%
+            mutate(
+              x = x + (xend - x) * 0.03, xend = xend - (xend - x) * 0.1,
+              y = y + (yend - y) * 0.03, yend = yend - (yend - y) * 0.1
+            )
+        })
+    }) %>%
+    with({
+      list(
+        slide1 = list(
+          alpha = list(ex = 2e-2, tf = 0.20, lr = 3e-2, ia = 3e-2),
+          title = "TF -> target"
+        )
+        , slide2 = list(
+          alpha = list(ex = 2e-2, tf = 3e-2, lr = 0.20, ia = 3e-2),
+          title = "Ligand -> receptor"
+        )
+        , slide3 = list(
+          alpha = list(ex = 2e-2, tf = 3e-2, lr = 3e-2, ia = 0.20),
+          title = "More protein-protein interaction"
+        )
+        , slide4 = list(
+          alpha = list(ex = 0.60, tf = 3e-2, lr = 3e-2, ia = 3e-2),
+          title = "Co-expression"
+        )
+      ) %>% lapply(
+        function(slide) {
+          ggplot() +
+            # Co-expression segments
+            geom_segment(
+              data = ex$segment,
+              aes(x = x, y = y, xend = xend, yend = yend),
+              color = igraph::E(ex$graph)$color,
+              alpha = slide$alpha$ex,
+              size = 0.1,
+              linetype = "solid"
+            ) +
+            # TF-target curves
+            geom_curve(
+              data = tf$segment,
+              lineend = "butt", # linejoin = "mitre",
+              aes(x = x, y = y, xend = xend, yend = yend),
+              arrow = arrow(length = unit(0.005, "npc")),
+              color = if_else(igraph::E(tf$graph)$sign > 0, "red", "blue"),
+              alpha = slide$alpha$tf,
+              size = 0.2,
+              curvature = 0.1,
+              linetype = "solid"
+            ) +
+            # Ligand-receptor curves
+            geom_curve(
+              data = lr$segment,
+              lineend = "butt", # linejoin = "mitre",
+              aes(x = x, y = y, xend = xend, yend = yend),
+              arrow = arrow(length = unit(0.005, "npc")),
+              color = if_else(igraph::E(lr$graph)$sign > 0, "red", "blue"),
+              alpha = slide$alpha$lr,
+              size = 0.2,
+              curvature = 0.1,
+              linetype = "solid"
+            ) +
+            # PPInteraction curves
+            geom_curve(
+              data = ia$segment,
+              lineend = "butt", # linejoin = "mitre",
+              aes(x = x, y = y, xend = xend, yend = yend),
+              arrow = arrow(length = unit(0.005, "npc")),
+              color = if_else(igraph::E(ia$graph)$sign > 0, "red", "blue"),
+              alpha = slide$alpha$ia,
+              size = 0.2,
+              curvature = 0.1,
+              linetype = "solid"
+            ) +
+            # Labels
+            geom_text(
+              data = ex$pos,
+              aes(x = x, y = y, label = igraph::V(ex$graph)$name),
+              size = 2,
+              color = igraph::V(ex$graph)$color
+            ) +
+            theme_void() +
+            ggplot2::ggtitle(slide$title) +
+            theme(plot.title = element_text(hjust = 0.95, vjust = -3, size = 10))
+        }
+      )
+    })
+
+  # graph %>%
+  #   igraph::plot.igraph(
+  #     edge.width = 0.7,
+  #     edge.color = igraph::E(.)$color,
+  #
+  #     vertex.size = 0,
+  #     vertex.shape = 'none',
+  #     #vertex.color = "black",
+  #     vertex.label.cex = 0.4,
+  #     vertex.label.color = vcolor[igraph::V(.)$name],
+  #
+  #     layout = graph_layout
+  #   )
+}
+```
+
+```{r, dpi=36, out.extra='class="scrollable"', out.width='30%', results='hide'}
+sce_dummy %>%
+  `[`(, (.)$group == "healthy") %>%
+  take_rows(get_goi_genes()) %>%
+  coex() %>%
+  show_coex_graph(sce_dummy.de$table %>% filter(src == "edgeR"))
+```
+
+##### Scenic
+
+```{r}
+# scenic_options <-
+#   SCENIC::initializeScenic(org = "mgi", dbDir = path_to("data/SCENIC/*cache"), dbs = SCENIC::defaultDbNames[["mgi"]], datasetTitle = "dummy", nCores = 1)
+```
+
+```{r}
+# sce_dummy@assays@data$counts %>%
+#   list(counts = .) %>% with({
+#     counts %>%
+#       `[`(SCENIC::geneFiltering(., scenicOptions = scenic_options), ) %>%
+#       #SCENIC::runCorrelation(scenic_options) %>%
+#       log1p() %>%
+#       SCENIC::runGenie3(scenic_options)
+#   })
+#
+#
+# `%dopar%` <- foreach::`%dopar%`
+# foreach <- foreach::foreach
+# scenic_options %>%
+#   SCENIC::runSCENIC_1_coexNetwork2modules() %>%
+#   SCENIC::runSCENIC_2_createRegulons() %>%
+#   SCENIC::runSCENIC_3_scoreCells(log1p(sce_dummy@assays@data$counts))
+```
+
+
+
+### ---
+
+Remove unused.
+
+```{r}
+rm(cco_revelio)
+gene.summary$hs <- NULL
+gc()
+```
+
+RAM usage.
+
+```{r}
+culprits() %>%
+  head(10) %>%
+  kable()
+```
+
+
+
+
+## Single-cell datasets {.tabset .tabset-fade .tabset-pills}
+
+### >
+
+### Prepare
+
+##### Loader list
+
+```{r}
+# Collection of dataset loaders
+load_dataset <- list()
+```
+
+##### Summarizer
+
+```{r}
+# Summarizes each column in `cols`
+# Call with results='asis'
+tables <- function(sce, cols) {
+  for (col in cols) {
+    sce@colData %>%
+      as.data.frame() %>%
+      pull(col) %>%
+      table(useNA = "ifany") %>%
+      as.data.frame() %>%
+      rename_with(~col, ".") %>%
+      rename_with(~"#", Freq) %>%
+      t() %>%
+      kable() %>%
+      print()
+
+    # https://bookdown.org/yihui/rmarkdown-cookbook/kable.html#generate-multiple-tables-from-a-for-loop
+    # https://stackoverflow.com/questions/52631689/how-to-show-formatted-r-output-with-results-asis-in-rmarkdown
+  }
+}
+```
+
+### Loaders {.tabset}
+
+#### Allen Brain, 2020
+
+##### About
+
+"Mouse Whole Cortex and Hippocampus 10x"
+dataset
+from Allen Brain, 2020:
+[[explore](https://celltypes.brain-map.org/rnaseq/mouse_ctx-hip_10x)],
+[[download](https://portal.brain-map.org/atlases-and-data/rnaseq/mouse-whole-cortex-and-hippocampus-10x)],
+[[protocols](https://portal.brain-map.org/atlases-and-data/rnaseq/protocols-mouse-cortex-and-hippocampus)].
+
+The dataset contains ~1M cells.
+We have [selected](../../data/AllenBrain/Mouse-WCH-2020) ~31k cells
+of type "Astro", "Endo" and "VLMC".
+
+##### Loader
+
+```{r}
+load_dataset$ab <- function(max.size = 9999) {
+  sce <-
+    make_sce(
+      counts = (
+        path_to("*/AllenBrain/Mouse-WCH*/*fewer_cells/data.*.gz") %>%
+          from_tsv() %>%
+          `[`(, sort(colnames(.)))
+      ),
+      coldata = (
+        path_to("*/AllenBrain/Mouse-WCH*/f*cells/meta.*.gz") %>%
+          from_tsv() %>%
+          `[`(sort(rownames(.)), )
+      )
+    ) %>%
+    # Only keep VLMC
+    `[`(, (.)$subclass_label == "VLMC") %>%
+    # Select a random subset of cells for expediency
+    `[`(, sample(colnames(.), size = min(ncol(.), max.size))) %>%
+    # Drop non-expressed cells
+    `[`(, (.)@assays@data$counts %>% colSums() > 0) %>%
+    # Order by cell type: sometimes convenient below, esp. for plotting
+    `[`(, order((.)$cell_type_alias_label))
+
+  # conversion to matrix takes long, hence do it here
+  sce@assays@data$counts %<>% as.matrix()
+
+  # alias `celltype` column
+  sce@colData$celltype <- sce@colData$cell_type_alias_label
+
+  sce@colData$celltype %<>% as.factor() %>% relevel(ref = "375_VLMC")
+
+  return(sce)
+}
+```
+
+
+#### Betsholtz, 2018
+
+##### About
+
+[GSE98816](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE98816):
+single cell RNA-seq of mouse brain vascular transcriptomes.
+
+##### Loader
+
+```{r}
+load_dataset$bh <- function(max.size = 9999) {
+  sce <-
+    make_sce(
+      counts = path_to("*/Betsholtz-2018/*/expr.*.gz") %>%
+        from_tsv() %>%
+        t(),
+      coldata = path_to("*/Betsholtz-2018/*/meta.*.gz") %>% from_tsv()
+    ) %>%
+    # Only keep FB
+    `[`(, (.)$celltype %in% c("FB1", "FB2")) %>%
+    # Select a random subset of cells for expediency
+    `[`(, sample(colnames(.), size = min(ncol(.), max.size))) %>%
+    # Drop non-expressed cells
+    `[`(, (.)@assays@data$counts %>% colSums() > 0) %>%
+    # Order by cell type
+    `[`(, order((.)$celltype))
+
+  sce@assays@data$counts %<>% as.matrix()
+
+  sce@colData$celltype %<>% as.factor() %>% relevel(ref = "FB1")
+
+  return(sce)
+}
+```
+
+
+#### Castelo-Branco, 2018
+
+##### About
+
+Raw data from
+[GSE113973](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE113973)
+(last update: Nov 13, 2019),
+metadata from
+[UCSC cell browser](https://cells.ucsc.edu/?ds=oligo-lineage-ms).
+
+Other links:
+[web app](https://castelobranco.shinyapps.io/EAE2017/),
+[paper](https://www.nature.com/articles/s41591-018-0236-y).
+
+##### Loader
+
+```{r}
+load_dataset$cb <- function(max.size = 9999) {
+  sce <-
+    make_sce(
+      counts = path_to("*/CasteloBranco-2018/*/expr.*.gz") %>%
+        from_tsv() %>%
+        {
+          # TODO: 1810011O10Rik	-> Tcim
+          # https://www.genecards.org/cgi-bin/carddisp.pl?gene=TCIM
+          (.)
+        } %>%
+        t(),
+      coldata = path_to("*/CasteloBranco-2018/*/meta.*.gz") %>%
+        from_tsv()
+    ) %>%
+    # Only keep those cells
+    `[`(, (.)$celltype %in% c("VLMC1", "VLMC2", "VLMC3", "VLMC4")) %>%
+    # Select a random subset of cells for expediency
+    `[`(, sample(colnames(.), size = min(ncol(.), max.size))) %>%
+    # Drop non-expressed cells
+    `[`(, (.)@assays@data$counts %>% colSums() > 0) %>%
+    # Order by cell type
+    `[`(, order((.)$celltype))
+
+  sce@assays@data$counts %<>% as.matrix()
+
+  sce@colData$Group %<>% as.factor() %>% relevel(ref = "Ctrl")
+  sce@colData$celltype %<>% as.factor() %>% relevel(ref = "VLMC3")
+
+  return(sce)
+}
+```
+
+
+#### Daneman, 2021
+
+##### About
+
+Expression data from
+[GSE135186](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE135186)
+(last update: Feb 10, 2021).
+The cell-to-cluster assignment is
+a private communication by D. Aran (2021-05-20).
+The associated paper is
+[Dorrier-Aran-...-Daneman, 2021](https://www.nature.com/articles/s41593-020-00770-9).
+
+##### Loader
+
+```{r}
+load_dataset$dm <- function(max.size = 9999) {
+  sce <-
+    make_sce(
+      counts = path_to("*/Daneman-2020/*/expr.*.gz") %>%
+        from_tsv() %>%
+        t(),
+      coldata = path_to("*/Daneman-2020/*/meta.*.gz") %>%
+        from_tsv()
+    ) %>%
+    # Select a random subset of cells for expediency
+    `[`(, sample(colnames(.), size = min(ncol(.), max.size))) %>%
+    # Drop non-expressed cells (there shouldn't be any here)
+    `[`(, (.)@assays@data$counts %>% colSums() > 0) %>%
+    # Order samples
+    `[`(, order((.)$cluster))
+
+  # Drop cells without cluster (they separate in dim. red. plots)
+  sce %<>% `[`(, !is.na((.)$cluster))
+
+  sce@assays@data$counts %<>% as.matrix()
+
+  # Set factor reference level
+  sce@colData$group %<>% as.factor() %>% relevel(ref = "healthy")
+  sce@colData$cluster %<>% c() %>%
+    as.factor() %>%
+    relevel(ref = "0")
+
+  # Alias for consistency
+  sce@colData$celltype <- sce@colData$cluster
+
+  return(sce)
+}
+```
+
+
+### Load all
+
+#### Read from disk
+
+```{r, cache=TRUE}
+datasets <- load_dataset %>% lapply(\(loader) loader(max.size = 777))
+```
+
+##### Attach reduced dimensions
+
+```{r, cache=TRUE, message=FALSE, results='hide'}
+datasets <- datasets %>% lapply(scater_attach)
+# memo: `%<>%` doesn't seem to work with cache=TRUE
+```
+
+
+### First look {.tabset}
+
+#### Allen Brain
+
+##### Cell type / Donor
+
+```{r, echo=FALSE}
+gridExtra::grid.arrange(
+  datasets$ab %>% scater_show(color.by = "celltype", colors = colors),
+  datasets$ab %>% scater_show(color.by = "donor_sex_label"),
+  ncol = 2
+)
+```
+
+#### Betsholtz
+
+##### Cell type / Mouse ID
+
+```{r, echo=FALSE}
+gridExtra::grid.arrange(
+  datasets$bh %>% scater_show(color.by = "celltype", colors = colors),
+  datasets$bh %>% scater_show(color.by = "Mouse ID"),
+  ncol = 2
+)
+```
+
+#### Castelo-Branco
+
+##### Cell type / Group
+
+```{r, echo=FALSE}
+gridExtra::grid.arrange(
+  datasets$cb %>% scater_show(color.by = "celltype", colors = colors),
+  datasets$cb %>% scater_show(color.by = "Group", colors = colors),
+  ncol = 2
+)
+```
+
+##### Mouse model / Plate
+
+```{r, echo=FALSE}
+gridExtra::grid.arrange(
+  datasets$cb %>% scater_show(color.by = "MouseModel", colors = colors),
+  datasets$cb %>% scater_show(color.by = "Plate", colors = colors),
+  ncol = 2
+)
+```
+
+#### Daneman
+
+##### Subgroup / Cluster
+
+```{r, echo=FALSE}
+gridExtra::grid.arrange(
+  datasets$dm %>% scater_show(color.by = "subgroup", colors = colors),
+  datasets$dm %>% scater_show(color.by = "cluster", colors = colors),
+  ncol = 2
+)
+```
+
+
+### ---
+
+Remove unused.
+
+```{r}
+gc()
+```
+
+RAM usage.
+
+```{r}
+culprits() %>%
+  head(10) %>%
+  kable()
+```
+
+
+
+
+## Analysis of each {.tabset .tabset-fade .tabset-pills}
+
+### >
+
+### Dm clusters {.tabset}
+
+The following is an approximation of
+[Extended Data Fig 4c](https://www.nature.com/articles/s41593-020-00770-9/figures/10)
+from
+[Dorrier-Aran-...-Daneman, 2021](https://www.nature.com/articles/s41593-020-00770-9).
+
+We check whether 
+other datasets (besides "Daneman")
+cluster by their cell types
+using the same set of genes.
+
+#### Daneman
+
+The samples are presorted by "Daneman" cluster
+and by condition within each cluster.
+
+```{r}
+datasets$dm %>%
+  {
+    # Remove the `celltype` columns (same as `cluster`)
+    .@colData %<>% `[`(, colnames(.) != "celltype", drop = FALSE)
+    # Order samples
+    .[, order(paste(.$cluster, .$subgroup))]
+  } %>%
+  show_dm_heatmap(colors = colors, cluster_cols = FALSE)
+```
+
+#### Allen Brain
+
+The samples are clustered.
+
+```{r}
+datasets$ab %>% show_dm_heatmap(colors = colors, cluster_cols = TRUE)
+```
+
+#### Betsholtz
+
+The samples are clustered.
+
+```{r}
+datasets$bh %>% show_dm_heatmap(colors = colors, cluster_cols = TRUE)
+```
+
+#### Castelo-Branco
+
+The samples are clustered.
+
+```{r}
+datasets$cb %>% show_dm_heatmap(colors = colors, cluster_cols = TRUE)
+```
+
+
+### Cell cycle {.tabset}
+
+#### Compute
+
+```{r, cache=TRUE}
+cco <- list(
+  ab = datasets$ab %>%
+    cell_cycle(batch.by = "celltype"),
+  bh = datasets$bh %>%
+    cell_cycle(batch.by = "celltype"),
+  cb = datasets$cb %>%
+    cell_cycle(batch.by = "celltype"),
+  dm = datasets$dm %>%
+    `[`(, (.)$subgroup %in% c("healthy1", "healthy2")) %>%
+    cell_cycle(batch.by = "subgroup")
+)
+```
+
+#### Allen Brain
+
+```{r}
+cco$ab %>% cell_cycle_plot2d(colors = colors)
+```
+
+#### Betsholtz
+
+```{r}
+cco$bh %>% cell_cycle_plot2d(colors = colors)
+```
+
+#### Castelo-Branco
+
+```{r}
+cco$cb %>% cell_cycle_plot2d(colors = colors)
+```
+
+#### Daneman ("healthy")
+
+```{r}
+cco$dm %>% cell_cycle_plot2d(colors = colors)
+```
+
+
+### Gene blobs {.tabset}
+
+#### Allen Brain
+
+##### By celltype
+
+```{r}
+datasets$ab %>% show_goi_pca(goi$pvf$genes, group.by = "celltype", colors = colors)
+```
+
+#### Betsholtz
+
+##### By celltype
+
+```{r}
+datasets$bh %>% show_goi_pca(goi$pvf$genes, group.by = "celltype", colors = colors)
+```
+
+#### Castelo-Branco
+
+##### By condition
+
+```{r}
+datasets$cb %>% show_goi_pca(goi$pvf$genes, group.by = "Group", colors = colors)
+```
+
+##### By celltype
+
+```{r}
+datasets$cb %>% show_goi_pca(goi$pvf$genes, group.by = "celltype", colors = colors)
+```
+
+#### Daneman
+
+##### By condition
+
+```{r}
+datasets$dm %>% show_goi_pca(goi$pvf$genes, group.by = "subgroup", colors = colors)
+```
+
+##### By cluster
+
+```{r}
+datasets$dm %>% show_goi_pca(goi$pvf$genes, group.by = "cluster")
+```
+
+
+### Geneset ratio {.tabset}
+
+#### Prepare
+
+```{r}
+pairs.to.contrast <-
+  list(
+    list(A = goi$col$name, B = goi$air$name),
+    list(A = goi$glycolysis$name, B = goi$air$name)
+  )
+```
+
+```{r}
+show_ab_density <- function(sce, group.by = "celltype", colors = ramp(sce@colData[[group.by]])) {
+  stopifnot(
+    all(sce@colData[[group.by]] %in% names(colors))
+  )
+
+  sce %<>%
+    scater::aggregateAcrossFeatures(
+      ids = symbol2goiset(rownames(.)),
+      average = TRUE,
+      use.assay.type = "logcounts"
+    )
+
+  pairs.to.contrast %>%
+    lapply(dual(function(A, B) {
+      data.frame(
+        a = sce@assays@data$logcounts[A, ],
+        b = sce@assays@data$logcounts[B, ],
+        g = sce@colData[[group.by]]
+      ) %>% {
+        (.) %>%
+          ggplot(aes(x = (a - b), color = g)) +
+          labs(x = paste0(A, " - ", B)) +
+          labs(y = "Fraction of cells (i.e., density)") +
+          labs(color = group.by) +
+          scale_color_manual(values = colors, breaks = gglast(colour)) +
+          ggtitle(paste0(A, " vs ", B)) +
+          geom_density(size = 3)
+      }
+    }))
+}
+```
+
+```{r}
+show_ab_2d <- function(sce, group.by = "celltype", colors = ramp(sce@colData[[group.by]])) {
+  stopifnot(
+    all(sce@colData[[group.by]] %in% names(colors))
+  )
+
+  # Group -- for color
+  g <- sce@colData[[group.by]]
+
+  # Library size -- for size
+  s <- sce@assays@data$counts %>% colSums()
+
+  sce %<>%
+    scater::aggregateAcrossFeatures(
+      ids = symbol2goiset(rownames(.)),
+      average = TRUE,
+      use.assay.type = "logcounts"
+    )
+
+  pairs.to.contrast %>%
+    lapply(dual(function(A, B) {
+      data.frame(
+        x = sce@assays@data$logcounts[A, ],
+        y = sce@assays@data$logcounts[B, ],
+        g = g,
+        s = s
+      ) %>% {
+        (.) %>%
+          ggplot(aes(x = x, y = y, color = g, size = s)) +
+          labs(x = A, y = B, color = group.by, size = "Library size") +
+          scale_color_manual(values = colors, breaks = gglast(colour)) +
+          geom_point(size = 5, alpha = 0.6) +
+          ggtitle(paste0(A, " vs ", B)) +
+          guides(shape = FALSE) +
+          geom_density_2d(size = 0.5) +
+          guides(color = guide_legend(override.aes = list(alpha = 1)))
+      }
+    }))
+}
+```
+
+#### Allen Brain
+
+```{r, warning=FALSE, results='hide'}
+datasets$ab %>% show_ab_density(group.by = "celltype", colors = colors)
+```
+
+```{r, warning=FALSE, results='hide'}
+datasets$ab %>% show_ab_2d(group.by = "celltype", colors = colors)
+```
+
+#### Betsholtz
+
+```{r, warning=FALSE, results='hide'}
+datasets$bh %>% show_ab_density(group.by = "celltype", colors = colors)
+```
+
+```{r, warning=FALSE, results='hide'}
+datasets$bh %>% show_ab_2d(group.by = "celltype", colors = colors)
+```
+
+#### Castelo-Branco
+
+```{r, warning=FALSE, results='hide'}
+datasets$cb %>% show_ab_density(group.by = "celltype", colors = colors)
+```
+
+```{r, warning=FALSE, results='hide'}
+datasets$cb %>% show_ab_2d(group.by = "celltype", colors = colors)
+```
+
+#### Daneman: clusters
+
+```{r, warning=FALSE, results='hide'}
+datasets$dm %>% show_ab_density(group.by = "cluster")
+```
+
+```{r, warning=FALSE, results='hide'}
+datasets$dm %>% show_ab_2d(group.by = "cluster")
+```
+
+#### Daneman: subgroup
+
+```{r, warning=FALSE, results='hide'}
+datasets$dm %>% show_ab_density(group.by = "subgroup", colors = colors)
+```
+
+```{r, warning=FALSE, results='hide'}
+datasets$dm %>% show_ab_2d(group.by = "subgroup", colors = colors)
+```
+
+
+
+### DE {.tabset}
+
+#### Compute
+
+```{r, cache=TRUE}
+de <- list(
+  # Other/375_VLMC
+  ab_other_vs_375 = datasets$ab %>% compute_de(~celltype),
+
+  # FB2/FB1:
+  bh_fb2_vs_fb1 = datasets$bh %>% compute_de(~celltype),
+
+  # EAE/Ctrl (exclude the VLMC3 cells because they separate on PCA):
+  cb_eae_vs_ctrl = datasets$cb %>% `[`(, (.)$celltype != "VLMC3") %>% compute_de(~Group),
+
+  # Other/VLMC3:
+  cb_other_vs_vlmc3 = datasets$cb %>% compute_de(~celltype),
+
+  # EAE/Healthy:
+  dm_eae_vs_hthy = datasets$dm %>% compute_de(~group)
+)
+```
+
+
+#### AB: Other/375_VLMC
+
+##### Most-DE genes
+
+```{r}
+de$ab_other_vs_375$table %>% show_de_table()
+```
+
+##### Heatmap of most DE genes (edgeR)
+
+```{r}
+datasets$ab %>%
+  show_de_heatmap(
+    de$ab_other_vs_375$table %>% filter(src == "edgeR"),
+    colors = colors
+  )
+```
+
+##### LogCMP vs LFC from edgeR
+
+```{r}
+de$ab_other_vs_375$table %>%
+  filter(src == "edgeR") %>%
+  show_de_basecamp() +
+  labs(x = "Up in 375_VLMC <-- LFC --> Up in Other")
+```
+
+##### Genewise LFC comparison
+
+```{r}
+de$ab_other_vs_375$table %>%
+  show_de_cmp_lfc()
+```
+
+##### Volcano plots
+
+```{r}
+de$ab_other_vs_375$table %>%
+  show_de_volcano() +
+  labs(x = "Up in 375_VLMC <-- LFC --> Up in Other", color = "Geneset")
+```
+
+
+#### Bh: FB2/FB1
+
+##### Most-DE genes
+
+```{r}
+de$bh_fb2_vs_fb1$table %>% show_de_table()
+```
+
+##### Heatmap of most DE genes (edgeR)
+
+```{r}
+datasets$bh %>%
+  show_de_heatmap(
+    de$bh_fb2_vs_fb1$table %>% filter(src == "edgeR"),
+    colors = colors
+  )
+```
+
+##### LogCMP vs LFC from edgeR:
+
+```{r}
+de$bh_fb2_vs_fb1$table %>%
+  filter(src == "edgeR") %>%
+  show_de_basecamp() +
+  labs(x = "Up in FB1 <-- LFC --> Up in FB2")
+```
+
+##### Genewise LFC comparison
+
+```{r}
+de$bh_fb2_vs_fb1$table %>%
+  show_de_cmp_lfc()
+```
+
+##### Volcano plots
+
+```{r}
+de$bh_fb2_vs_fb1$table %>%
+  show_de_volcano() +
+  labs(x = "Up in FB1 <-- LFC --> Up in FB2", color = "Geneset")
+```
+
+
+
+#### CB: Other/VLMC3
+
+##### Most-DE genes
+
+```{r}
+de$cb_other_vs_vlmc3$table %>% show_de_table()
+```
+
+##### Heatmap of most DE genes (edgeR)
+
+```{r}
+datasets$cb %>%
+  show_de_heatmap(
+    de$cb_other_vs_vlmc3$table %>% filter(src == "edgeR"),
+    colors = colors
+  )
+```
+
+##### LogCMP vs LFC from edgeR:
+
+```{r}
+de$cb_other_vs_vlmc3$table %>%
+  filter(src == "edgeR") %>%
+  show_de_basecamp() +
+  labs(x = "Up in VLMC3 <-- LFC --> Up in Other")
+```
+
+##### Genewise LFC omparison
+
+```{r}
+de$cb_other_vs_vlmc3$table %>%
+  show_de_cmp_lfc()
+```
+
+##### Volcano plots
+
+```{r}
+de$cb_other_vs_vlmc3$table %>%
+  show_de_volcano() +
+  labs(x = "Up in VLMC3 <-- LFC --> Up in Other", color = "Geneset")
+```
+
+
+#### CB (reduced): EAE/Ctrl
+
+##### Most-DE genes
+
+```{r}
+de$cb_eae_vs_ctrl$table %>% show_de_table()
+```
+
+##### Heatmap of most DE genes (edgeR)
+
+```{r}
+datasets$cb %>%
+  show_de_heatmap(
+    de$cb_eae_vs_ctrl$table %>% filter(src == "edgeR"),
+    colors = colors
+  )
+```
+
+##### LogCMP vs LFC from edgeR:
+
+```{r}
+de$cb_eae_vs_ctrl$table %>%
+  filter(src == "edgeR") %>%
+  show_de_basecamp() +
+  labs(x = "Up in Ctrl <-- LFC --> Up in EAE")
+```
+
+##### Genewise LFC comparison
+
+```{r}
+de$cb_eae_vs_ctrl$table %>%
+  show_de_cmp_lfc()
+```
+
+##### Volcano plots
+
+```{r}
+de$cb_eae_vs_ctrl$table %>%
+  show_de_volcano() +
+  labs(x = "Up in Ctrl <-- LFC --> Up in EAE", color = "Geneset")
+```
+
+
+#### Dm: EAE/Healthy
+
+##### Most-DE genes
+
+```{r}
+de$dm_eae_vs_hthy$table %>% show_de_table()
+```
+
+##### Heatmap of most DE genes (edgeR)
+
+```{r}
+datasets$dm %>%
+  {
+    # Remove the `celltype` columns (same as `cluster`)
+    .@colData %<>% `[`(, colnames(.) != "celltype", drop = FALSE)
+    # Order samples
+    .[, order(.$subgroup)]
+  } %>%
+  show_de_heatmap(
+    de$dm_eae_vs_hthy$table %>% filter(src == "edgeR"),
+    cluster_cols = FALSE,
+    colors = colors
+  )
+```
+
+##### LogCMP vs LFC from edgeR:
+
+```{r}
+de$dm_eae_vs_hthy$table %>%
+  filter(src == "edgeR") %>%
+  show_de_basecamp() +
+  labs(x = "Healthy <-- LFC --> EAE")
+```
+
+##### Genewise LFC comparison
+
+```{r}
+de$dm_eae_vs_hthy$table %>%
+  show_de_cmp_lfc()
+```
+
+##### Volcano plots
+
+```{r}
+de$dm_eae_vs_hthy$table %>%
+  show_de_volcano() +
+  labs(x = "Healthy <-- LFC --> EAE", color = "Geneset")
+```
+
+
+
+### GO {.tabset}
+
+#### Compute
+
+```{r, cache=TRUE, message=FALSE}
+go <-
+  list(A = 33, B = 77, C = 144) %>% lapply(function(n) {
+    de %>% lapply(function(de_result) {
+      de_result$table %>% compute_go(n = n)
+    })
+  })
+```
+
+#### AB: Other/375_VLMC
+
+```{r}
+go$A$ab_other_vs_375 %>% show_go_table()
+```
+
+#### Bh: FB2/FB1
+
+```{r}
+go$A$bh_fb2_vs_fb1 %>% show_go_table()
+```
+
+#### CB: Other/VLMC3
+
+```{r}
+go$A$cb_other_vs_vlmc3 %>% show_go_table()
+```
+
+#### CB (reduced): EAE/Ctrl
+
+```{r}
+go$A$cb_eae_vs_ctrl %>% show_go_table()
+```
+
+#### Dm: EAE/Healthy
+
+```{r}
+go$A$dm_eae_vs_hthy %>% show_go_table()
+```
+
+
+### Co-expression {.tabset}
+
+The straight edges are the top negative (blue) and positive (red) 
+gene-gene Spearman correlations
+among the "genes of interest"
+within each sub-dataset.
+The nodes are colored by condition.
+
+The arched edges are 
+TF-target,
+ligand-receptor,
+protein-protein interactions
+from OmniPath.
+
+Click on the figure to change the view;
+shift-click to enlarge.
+
+#### Allen Brain
+
+##### All
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$ab %>%
+  take_rows(get_goi_genes()) %>%
+  coex() %>%
+  show_coex_graph(de$ab_other_vs_375$table %>% filter(src == "edgeR"))
+```
+
+##### 374_VLMC
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$ab %>%
+  take_rows(get_goi_genes()) %>%
+  `[`(, .$celltype == "374_VLMC") %>%
+  coex() %>%
+  show_coex_graph(de$ab_other_vs_375$table %>% filter(src == "edgeR"))
+```
+
+##### 375_VLMC
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$ab %>%
+  take_rows(get_goi_genes()) %>%
+  `[`(, .$celltype == "375_VLMC") %>%
+  coex() %>%
+  show_coex_graph(de$ab_other_vs_375$table %>% filter(src == "edgeR"))
+```
+
+##### 376_VLMC
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$ab %>%
+  take_rows(get_goi_genes()) %>%
+  `[`(, .$celltype == "376_VLMC") %>%
+  coex() %>%
+  show_coex_graph(de$ab_other_vs_375$table %>% filter(src == "edgeR"))
+```
+
+
+#### Betsholtz
+
+##### All
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$bh %>%
+  take_rows(get_goi_genes()) %>%
+  coex() %>%
+  show_coex_graph(de$bh_fb2_vs_fb1$table %>% filter(src == "edgeR"))
+```
+
+##### FB1
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$bh %>%
+  take_rows(get_goi_genes()) %>%
+  `[`(, .$celltype == "FB1") %>%
+  coex() %>%
+  show_coex_graph(de$bh_fb2_vs_fb1$table %>% filter(src == "edgeR"))
+```
+
+##### FB2
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$bh %>%
+  take_rows(get_goi_genes()) %>%
+  `[`(, .$celltype == "FB2") %>%
+  coex() %>%
+  show_coex_graph(de$bh_fb2_vs_fb1$table %>% filter(src == "edgeR"))
+```
+
+
+#### Castelo-Branco
+
+##### All
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$cb %>%
+  take_rows(get_goi_genes()) %>%
+  coex() %>%
+  show_coex_graph(de$cb_eae_vs_ctrl$table %>% filter(src == "edgeR"))
+```
+
+##### Ctrl
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$cb %>%
+  take_rows(get_goi_genes()) %>%
+  `[`(, .$Group == "Ctrl") %>%
+  coex() %>%
+  show_coex_graph(de$cb_eae_vs_ctrl$table %>% filter(src == "edgeR"))
+```
+
+##### EAE
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$cb %>%
+  take_rows(get_goi_genes()) %>%
+  `[`(, .$Group == "EAE") %>%
+  coex() %>%
+  show_coex_graph(de$cb_eae_vs_ctrl$table %>% filter(src == "edgeR"))
+```
+
+
+#### Daneman
+
+##### All
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$dm %>%
+  take_rows(get_goi_genes()) %>%
+  coex() %>%
+  show_coex_graph(de$dm_eae_vs_hthy$table %>% filter(src == "edgeR"))
+```
+
+##### Healthy1+2
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$dm %>%
+  take_rows(get_goi_genes()) %>%
+  `[`(, .$subgroup %in% c("healthy1", "healthy2")) %>%
+  coex() %>%
+  show_coex_graph(de$dm_eae_vs_hthy$table %>% filter(src == "edgeR"))
+```
+
+##### Healthy3
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$dm %>%
+  take_rows(get_goi_genes()) %>%
+  `[`(, .$subgroup == "healthy3") %>%
+  coex() %>%
+  show_coex_graph(de$dm_eae_vs_hthy$table %>% filter(src == "edgeR"))
+```
+
+##### EAE1
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$dm %>%
+  take_rows(get_goi_genes()) %>%
+  `[`(, .$subgroup == "EAE1") %>%
+  coex() %>%
+  show_coex_graph(de$dm_eae_vs_hthy$table %>% filter(src == "edgeR"))
+```
+
+##### EAE2
+
+```{r, out.extra='class="zoomable scrollable"', results='hide'}
+datasets$dm %>%
+  take_rows(get_goi_genes()) %>%
+  `[`(, .$subgroup == "EAE2") %>%
+  coex() %>%
+  show_coex_graph(de$dm_eae_vs_hthy$table %>% filter(src == "edgeR"))
+```
+
+
+
+### ---
+
+Clean up.
+
+```{r}
+gc()
+```
+
+RAM usage.
+
+```{r}
+culprits() %>%
+  head(10) %>%
+  kable()
+```
+
+
+
+
+## Combined {.tabset .tabset-fade .tabset-pills}
+
+### > 
+
+### Prepare
+
+##### Combined DE table
+
+```{r, cache=TRUE}
+de_tables <- list(
+  a = de$ab_other_vs_375$table %>% mutate(name = "AB: Other/375_VLMC"),
+  b = de$bh_fb2_vs_fb1$table %>% mutate(name = "Bh: FB2/FB1"),
+  c1 = de$cb_other_vs_vlmc3$table %>% mutate(name = "CB: Other/VLMC3"),
+  c2 = de$cb_eae_vs_ctrl$table %>% mutate(name = "CB': EAE/Ctrl"),
+  d = de$dm_eae_vs_hthy$table %>% mutate(name = "Dm: EAE/Healthy")
+)
+```
+
+```{r}
+de_tables %>%
+  dual(rbind) %>%
+  slice_sample(n = 7)
+```
+
+##### Combined SCE dataset with reduced geneset
+
+```{r, cache=TRUE}
+datasets$combo <-
+  list(
+    ab = data.frame(
+      datasets$ab@assays@data$counts %>% take_rows(get_goi_genes()) %>% t(),
+      group = "AB",
+      subgroup = datasets$ab$celltype
+    ),
+    bh = data.frame(
+      datasets$bh@assays@data$counts %>% take_rows(get_goi_genes()) %>% t(),
+      group = "Bh",
+      subgroup = datasets$bh$celltype
+    ),
+    cb = data.frame(
+      datasets$cb@assays@data$counts %>% take_rows(get_goi_genes()) %>% t(),
+      group = "CB",
+      subgroup = datasets$cb$Group
+    ),
+    dm = data.frame(
+      datasets$dm@assays@data$counts %>% take_rows(get_goi_genes()) %>% t(),
+      group = "Dm",
+      subgroup = datasets$dm$subgroup
+    ) %>% {
+      (.)[sample(rownames(.), size = min(nrow(.), 777)), ]
+    }
+  ) %>%
+  lapply(function(ds) {
+    ds[, Reduce(intersect, lapply(., colnames))]
+  }) %>%
+  dual(rbind) %>%
+  {
+    make_sce(
+      (.) %>% select(-group, -subgroup) %>% t(),
+      (.) %>% select(group, subgroup)
+    )
+  }
+```
+
+```{r}
+print(datasets$combo)
+```
+
+
+### Compare LFC {.tabset}
+
+#### LFC x LFC
+
+Compare the gene LFC (edgeR) across datasets.
+Each dot is a gene
+with x-coordinate as the LFC in one dataset
+and y-coordinate as the LFC in another.
+
+```{r, message=FALSE, warning=FALSE, dpi=72, out.extra='class="zoomable"'}
+de_tables %>%
+  lapply(function(t) {
+    t %>%
+      group_by(name, src) %>%
+      mutate(lfc = (lfc - mean(lfc)) / sd(lfc)) %>%
+      ungroup() %>%
+      filter(src == "edgeR")
+  }) %>%
+  with({
+    rbind(
+      merge(a, b, by = "symbol"),
+      merge(a, c1, by = "symbol"),
+      merge(a, c2, by = "symbol"),
+      merge(a, d, by = "symbol"),
+      merge(b, c1, by = "symbol"),
+      merge(b, c2, by = "symbol"),
+      merge(b, d, by = "symbol"),
+      merge(c1, d, by = "symbol"),
+      merge(c2, d, by = "symbol")
+    )
+  }) %>%
+  mutate(goi_set = symbol2goiset(symbol)) %>%
+  {
+    ggplot(., aes(x = lfc.x, y = lfc.y)) +
+
+      # Background
+      geom_point(alpha = 0.05, color = "black", size = 0.7) +
+      geom_smooth(formula = y ~ x, method = "lm", size = 0.2, color = "gray") +
+
+      # Foreground
+      geom_point(
+        data = filter(., goi_set != "Other"),
+        aes(color = goi_set),
+        stroke = 0, size = 1, alpha = 0.7
+      ) +
+
+      # geom_smooth(data = filter(., goi_set != "Other"), formula = y ~ x, method = 'lm', size = 0.2) +
+
+      labs(x = "LFC", y = "LFC", color = "") +
+
+      # scale_color_brewer(palette = "Set1") +
+
+      facet_grid(
+        cols = vars(name.x), rows = vars(name.y),
+        scale = "free"
+      ) +
+      theme(
+        legend.position = "bottom",
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        strip.text = element_text(size = 10),
+        axis.title = element_blank()
+      ) +
+      guides(color = guide_legend(override.aes = list(size = 3, alpha = 1)))
+  }
+```
+
+#### Top DE
+
+The following table shows the top genes
+that are DE (one way or another according to edgeR)
+simultaneously in several datasets.
+
+```{r}
+make_common_de_table <- function(de_tables, slicer = slice_max) {
+  de_tables %>%
+    lapply(function(t) {
+      t %>%
+        group_by(name, src) %>%
+        mutate(norm.lfc = ((lfc - mean(lfc)) / sd(lfc))) %>%
+        slicer(abs(norm.lfc), n = 777) %>%
+        ungroup() %>%
+        filter(src == "edgeR")
+    }) %>%
+    dual(rbind) %>%
+    as.data.frame() %>%
+    {
+      # print(head(.))
+      .
+    } %>%
+    select(symbol, norm.lfc, name) %>%
+    stats::reshape(direction = "wide", idvar = "symbol", timevar = "name") %>%
+    # Commonly-DE first
+    arrange(desc(rowSums(!is.na(across(where(is.numeric)))))) %>%
+    # Signature of NAs
+    rowwise() %>%
+    mutate(signature = paste(across(where(is.numeric), ~ ifelse(is.na(.x), "N", "Y")), collapse = "")) %>%
+    ungroup() %>%
+    # Role: TF, Rec, Lig, etc
+    mutate(role = symbol2role(symbol)) %>%
+    # Reset rownames
+    as.data.frame(row.names = 1:nrow(.)) %>%
+    # Formatting
+    mutate(symbol = as.link(symbol)) %>%
+    mutate(across(where(is.numeric), signif, 3)) %>%
+    DT::datatable(escape = FALSE, rownames = TRUE)
+}
+```
+
+```{r}
+de_tables %>% make_common_de_table(slicer = slice_max)
+```
+
+
+
+### Agg. heatmaps {.tabset}
+
+#### Prepare
+
+##### Stack of grouped datasets in long form (reduced gene set)
+
+```{r}
+datasets$grouped <-
+  list(
+    list(ds = datasets$ab, name = "AB", group.by = "celltype"),
+    list(ds = datasets$bh, name = "Bh", group.by = "celltype"),
+    list(ds = datasets$cb, name = "CB", group.by = "celltype"),
+    list(ds = datasets$cb, name = "CB", group.by = "Group"),
+    list(ds = datasets$dm, name = "Dm", group.by = "cluster"),
+    list(ds = datasets$dm, name = "Dm", group.by = "subgroup")
+  ) %>%
+  lapply(dual(
+    function(ds, name, group.by) {
+      ds %>%
+        # Subset genes
+        take_rows(
+          unique(goi %>% lapply(as.data.frame) %>% dual(rbind) %>% pull(genes))
+        ) %>%
+        scuttle::aggregateAcrossCells(ids = ds[[group.by]], use.assay.type = "logcounts", statistics = "mean") %>%
+        SingleCellExperiment::logcounts() %>%
+        as.data.frame() %>%
+        ind2col("symbol") %>%
+        reshape2::melt(id.vars = "symbol", variable.name = "subgroup", value.name = "expression") %>%
+        mutate(dataset = name, subdataset = paste0(name, " (", group.by, ")"), group = group.by) %>%
+        mutate(role = symbol2role(symbol))
+
+      # TODO: add description?
+    }
+  )) %>%
+  dual(rbind)
+```
+
+##### Symbols to highlight
+
+```{r}
+interesting <- c(
+  # Daneman clusters
+  c("Rbp1", "Fn1", "Igfbp7"),
+
+  # Aerobic
+  c("Cox3b", "Cox7c", "Bloc1s1"),
+
+  # Anaerobic glycolysis
+  c("Ier3"),
+
+  # Collagen
+  c("Col4a1", "Col4a2", "Col8a1", "Col3a1"),
+
+  # Fib. migration
+  c("Sdc4")
+)
+```
+
+##### Tiled heatmap plotter
+
+```{r}
+show_stack <- function(ds) {
+  ds$role
+
+  ds %>%
+    mutate(role = if_else(role == "", "Unknown", role)) %>%
+    group_by(subdataset) %>%
+    mutate(expression = 100 * expression / max(expression)) %>%
+    ungroup() %>%
+    mutate(
+      symbol = if_else(symbol %in% interesting, glue("<span style='color:red;'>{symbol}</span>"), symbol)
+    ) %>%
+    mutate(color = c(ramp(0:7), colors)[as.character(subgroup)]) %>%
+    mutate(subgroup = glue("<span name='{subgroup}' style='color:{color};'>{subgroup}</span>")) %>%
+    # Append role to symbol
+    # mutate(symbol = paste0(symbol, " (", role, ")")) %>%
+
+    # Heatmaps
+    ggplot(aes(x = subgroup, y = symbol, fill = expression)) +
+    geom_tile() +
+    scale_y_discrete(limits = rev) +
+    scale_fill_gradient(low = "black", high = "yellow") +
+    labs(fill = "%") +
+    theme(
+      axis.text.x = ggtext::element_markdown(
+        size = 12, angle = 90, vjust = 0.5, hjust = 1
+      ),
+      axis.title = element_blank(),
+      legend.title = element_text(size = 9),
+      legend.text = element_text(size = 9),
+
+      # Remove the `role` strip altogether
+      # strip.text.y = element_blank(),
+
+      strip.text.y = element_text(color = "black", angle = 0, size = 8),
+      strip.text.x = element_text(color = "black", size = 10),
+    ) +
+    facet_grid(
+      cols = vars(subdataset),
+      rows = vars(role),
+      space = "free",
+      scales = "free",
+      labeller = label_wrap_gen(5)
+    ) +
+    theme(axis.text.y = ggtext::element_markdown())
+}
+```
+
+#### Daneman clusters
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide', eval=TRUE, out.extra='class="zoomable"'}
+(0:7) %>%
+  lapply(function(i) {
+    datasets$grouped %>%
+      filter(symbol %in% goi[[paste0("c", i)]]$genes) %>%
+      show_stack() +
+      ggtitle(paste0("Cluster #", i)) +
+      theme(axis.text.y = ggtext::element_markdown(size = 12))
+  })
+```
+
+#### Inflammation
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide', out.extra='class="zoomable"'}
+datasets$grouped %>%
+  filter(symbol %in% goi$neuroinflammation$genes) %>%
+  show_stack() +
+  theme(axis.text.y = ggtext::element_markdown(size = 12))
+```
+
+#### Col-
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide', out.extra='class="zoomable"'}
+datasets$grouped %>%
+  filter(symbol %in% goi$col$genes) %>%
+  show_stack() +
+  theme(axis.text.y = ggtext::element_markdown(size = 9))
+```
+
+#### Aerobic
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide', out.extra='class="zoomable"'}
+datasets$grouped %>%
+  filter(symbol %in% goi$air$genes) %>%
+  show_stack() +
+  theme(axis.text.y = ggtext::element_markdown(size = 7))
+```
+
+#### Anaerobic
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide', out.extra='class="zoomable"'}
+datasets$grouped %>%
+  filter(symbol %in% goi$glycolysis$genes) %>%
+  show_stack() +
+  theme(axis.text.y = ggtext::element_markdown(size = 6))
+```
+
+#### Fib. migration
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide', out.extra='class="zoomable"'}
+datasets$grouped %>%
+  filter(symbol %in% goi$fib_mig$genes) %>%
+  show_stack() +
+  theme(axis.text.y = ggtext::element_markdown(size = 10))
+```
+
+
+### Geneset-PCA {.tabset}
+
+For some of the gene sets,
+the following tabs
+show reduced dimension plots (PCA/TSNE/UMAP)
+once the combined dataset is restricted
+to that gene set.
+
+#### Prepare
+
+##### Plotting 2d dimension reduction
+
+```{r}
+colors # required below
+
+common_map <- function(sce, dimred = NULL) {
+  sce %<>% drop_empty()
+
+  if (is.null(dimred)) {
+    sce %<>% norm1() %>% scater_attach()
+    return(list(
+      PCA = common_map(sce, dimred = "PCA"),
+      TSNE = common_map(sce, dimred = "TSNE"),
+      UMAP = common_map(sce, dimred = "UMAP")
+    ))
+  }
+
+  sce %>%
+    {
+      cbind(
+        .@colData %>% as.data.frame(),
+        list(
+          TSNE = .@int_colData$reducedDims$TSNE %>%
+            as.data.frame() %>%
+            select(x = V1, y = V2),
+          UMAP = .@int_colData$reducedDims$UMAP %>%
+            as.data.frame() %>%
+            select(x = V1, y = V2),
+          PCA = .@int_colData$reducedDims$PCA %>%
+            as.data.frame() %>%
+            select(x = PC1, y = PC2)
+        )[[dimred]]
+      )
+    } %>%
+    group_by(group) %>%
+    arrange(subgroup) %>%
+    mutate(rk = as.factor(dense_rank(subgroup))) %>%
+    ungroup() %>%
+    mutate(color = colors[as.character(subgroup)]) %>%
+    mutate(subgroup = paste0(group, ": ", subgroup)) %>%
+    {
+      ggplot((.), aes(x = x, y = y, color = subgroup)) +
+        geom_point(data = ((.) %>% select(-group)), alpha = 0.05, size = 1) +
+        geom_point(alpha = 0.5, size = 1.5) +
+        facet_wrap(. ~ group) +
+        scale_color_manual(values = (select(., color, subgroup) %>% pull(color, subgroup))) +
+        ggplot2::ggtitle(dimred) +
+        theme(
+          axis.title = element_blank(),
+          axis.ticks = element_blank(),
+          axis.text = element_blank(),
+          plot.title = element_text(),
+        ) +
+        guides(color = guide_legend(override.aes = list(size = 3, alpha = 1)))
+    }
+}
+```
+
+##### Plotting 3d PCA
+
+```{r}
+common_map_3d <- function(sce, color.by = "subgroup") {
+  sce %<>%
+    drop_empty() %>%
+    norm1() %>%
+    scater::logNormCounts() %>%
+    scater::runPCA()
+
+  data.frame(
+    color_group = sce@colData[[color.by]],
+    lib.size = sce@assays@data$counts %>% colSums(),
+    SingleCellExperiment::reducedDim(sce, "PCA") %>%
+      as.data.frame() %>%
+      select(PC1, PC2, PC3)
+  ) %>%
+    group_by(color_group) %>%
+    sample(size = 33, replace = TRUE) %>%
+    ungroup() %>%
+    # plotly::plot_ly(type = "scatter3d", mode = "markers",
+
+    plotly::plot_ly() %>%
+    plotly::add_markers(
+      x = ~PC1, y = ~PC2, z = ~PC3,
+      marker = list(size = 2, opacity = 1),
+      color = ~color_group, colors = colors
+    ) %>%
+    plotly::layout(
+      scene = list(
+        xaxis = list(title = "PC1", showticklabels = FALSE),
+        yaxis = list(title = "PC2", showticklabels = FALSE),
+        zaxis = list(title = "PC3", showticklabels = FALSE)
+      )
+    )
+}
+```
+
+#### All GoI
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide'}
+datasets$combo %>% common_map()
+```
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE}
+datasets$combo %>% common_map_3d()
+```
+
+#### Inflammation
+
+```{r}
+geneset <- goi$neuroinflammation$genes
+```
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide'}
+datasets$combo %>%
+  take_rows(geneset) %>%
+  common_map()
+```
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE}
+datasets$combo %>%
+  take_rows(geneset) %>%
+  common_map_3d()
+```
+
+#### Col-
+
+```{r}
+geneset <- goi$col$genes
+```
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide'}
+datasets$combo %>%
+  take_rows(geneset) %>%
+  common_map()
+```
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE}
+datasets$combo %>%
+  take_rows(geneset) %>%
+  common_map_3d()
+```
+
+#### Aerobic
+
+```{r}
+geneset <- goi$air$genes
+```
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide'}
+datasets$combo %>%
+  take_rows(geneset) %>%
+  common_map()
+```
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE}
+datasets$combo %>%
+  take_rows(geneset) %>%
+  common_map_3d()
+```
+
+#### Anaerobic
+
+```{r}
+geneset <- goi$glycolysis$genes
+```
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide'}
+datasets$combo %>%
+  take_rows(geneset) %>%
+  common_map()
+```
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE}
+datasets$combo %>%
+  take_rows(geneset) %>%
+  common_map_3d()
+```
+
+#### Fib. migration
+
+```{r}
+geneset <- goi$fib_mig$genes
+```
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide'}
+datasets$combo %>%
+  take_rows(geneset) %>%
+  common_map()
+```
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE}
+datasets$combo %>%
+  take_rows(geneset) %>%
+  common_map_3d()
+```
+
+
+
+
+### Kidney {.tabset}
+
+For each dataset we compare
+the most-DE genes
+to those
+from the kidney fibroblast activation gene set SI7
+(see above).
+The LFCs are first standardized and filtered to top absolute LFC.
+
+#### Prepare
+
+```{r}
+de_tables_vs_si7 <-
+  de_tables %>%
+  dual(rbind) %>%
+  group_by(name, src) %>%
+  mutate(norm.lfc = (lfc - mean(lfc)) / sd(lfc)) %>%
+  filter(abs(norm.lfc) >= quantile(abs(norm.lfc), 0.95)) %>%
+  ungroup() %>%
+  merge(
+    y = fb_genes_si7 %>%
+      select(lfc = logFC) %>%
+      ind2col("symbol") %>%
+      mutate(norm.lfc = (lfc - mean(lfc)) / sd(lfc)) %>%
+      filter(abs(norm.lfc) >= quantile(abs(norm.lfc), 0.95)) %>%
+      rename(norm.lfc.ref = norm.lfc),
+    by = "symbol",
+    all = TRUE
+  ) %>%
+  mutate(delta = norm.lfc - norm.lfc.ref)
+```
+
+#### Plot Dataset vs Kidney
+
+We only keep the LFC from edgeR.
+
+```{r, cache=TRUE, dpi=72, out.extra='class="zoomable"'}
+de_tables_vs_si7 %>%
+  tidyr::drop_na() %>%
+  filter(src == "edgeR") %>%
+  group_by(name, src) %>%
+  mutate(is_out = FALSE) %>%
+  mutate(
+    is_out = is_out |
+      symbol %in% (slice_min(., norm.lfc, n = 5) %>% pull(symbol)) |
+      symbol %in% (slice_max(., norm.lfc, n = 5) %>% pull(symbol))
+  ) %>%
+  mutate(
+    is_out = is_out |
+      symbol %in% (slice_min(., norm.lfc.ref, n = 5) %>% pull(symbol)) |
+      symbol %in% (slice_max(., norm.lfc.ref, n = 5) %>% pull(symbol))
+  ) %>%
+  mutate(label = if_else(is_out, symbol, "")) %>%
+  ungroup() %>%
+  ggplot(aes(x = norm.lfc, y = norm.lfc.ref, color = name)) +
+  ggrepel::geom_text_repel(
+    aes(label = label),
+    hjust = 1.1, size = 3, show.legend = FALSE,
+    max.overlaps = Inf, point.size = NA,
+    segment.alpha = 0.2
+  ) +
+  geom_point(size = 1, alpha = 0.3) +
+  geom_hline(yintercept = 0, alpha = 0.2) +
+  geom_vline(xintercept = 0, alpha = 0.2) +
+  labs(x = "Standardized LFC in Dataset", y = "Standardized LFC in Reference", color = "Dataset") +
+  scale_color_brewer(palette = "Set1") +
+  theme(
+    legend.title = element_text(size = 9),
+    legend.text = element_text(size = 9),
+    legend.position = "bottom"
+  ) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 3)))
+```
+
+#### Table
+
+The genes that have a very different LFC
+(between two conditions within a dataset)
+from the set SI7 (see data sources)
+are the one with the most positive or most negative "delta".
+
+```{r}
+de_tables_vs_si7 %>%
+  tidyr::drop_na() %>%
+  select(symbol, dataset = name, src, norm.lfc, norm.lfc.ref, delta) %>%
+  mutate(symbol = as.link(symbol)) %>%
+  DT::datatable(escape = FALSE)
+```
+
+
+
+### (TODO)
+
+
+####
+
+```{r}
+# Genes DE in EAE but not in AB dataset
+```
+
+
+
+
+### ---
+
+Clean up.
+
+```{r}
+gc()
+```
+
+RAM usage.
+
+```{r}
+culprits() %>%
+  head(10) %>%
+  kable()
+```
+
+
+
+
+## Conclusions
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+-
+
+
+
+```{r, include=FALSE}
+knitr::knit_exit()
+```
+
+
+# ------------------------------------------------------------------------
+
+
+
+
+
+
+
+## Conclusions
+
+--
+
+
+```{r include=FALSE}
+knitr::knit_exit()
+```
+
+
+
+```{r include=FALSE}
+knitr::knit_exit()
+```
+
+
+
+## Non-DE genes
+
+```{r}
+sce_dm <- load_dataset$dm(size = 333)
+```
+
+```{r}
+(sce_dm %<>% scater_attach()) %>% scater_show()
+```
+
+```{r}
+sce_dm.healthy <- sce_dm %>% deseq(~group)
+```
+
+```{r}
+sce_dm.healthy %>%
+  select(p, lfc = log2FoldChange) %>%
+  filter(!is.na(p)) %>%
+  ind2col("symbol") %>%
+  mutate(logcounts = rowSums(sce_dm@assays@data$counts)[symbol]) %>%
+  ggplot(aes(x = lfc, y = logcounts)) +
+  geom_text(
+    aes(label = ifelse(
+      (logcounts > 2 * IQR(logcounts)) & (lfc < 0.5 * IQR(lfc)),
+      symbol, ""
+    )),
+    hjust = 1.3, size = 3, color = "blue"
+  ) +
+  scale_y_log10() +
+  labs(
+    x = "Healthy <-- lfc --> EAE",
+    y = "Total read counts"
+  ) +
+  geom_point()
+```
+
+```{r}
+cbind(
+  sce_dm@colData %>%
+    as.data.frame() %>%
+    select(group),
+  sce_dm@assays@data$counts[c("Tgfbi", "Apod", "Lum", "Gpc3", "Trf", "Myl9", "Cdkn1a"), , drop = FALSE] %>% t()
+) %>%
+  reshape2::melt(
+    id.vars = c("group"),
+    variable.name = "symbol",
+    value.name = "count"
+  ) %>%
+  ggplot(aes(x = log1p(count), color = group)) +
+  facet_grid(rows = vars(symbol), scale = "free_y") +
+  labs(x = "log1p Counts") +
+  scale_color_brewer(palette = "Set2") +
+  labs(y = "Density of cells") +
+  geom_density()
+```
+
+
+```{r}
+entrez.ids <- org.Mm.eg.db::org.Mm.egSYMBOL2EG[c("Apod", "Tgfbi")] %>% as.list()
+
+gene.summary$mm %>%
+  filter(gene_id %in% entrez.ids) %>%
+  pull(summary)
+
+entrez.ids <- org.Mm.eg.db::org.Mm.egSYMBOL2EG %>%
+  as.data.frame() %>%
+  pull(gene_id)
+
+org.Mm.eg.db::org.Mm.egSYMBOL2EG %>%
+  as.data.frame() %>%
+  pull(gene_id) %>%
+  head() %>%
+  rentrez::entrez_summary(id = ., db = "gene") %>%
+  {
+    do.call("rbind", .)
+  } %>%
+  as.data.frame() %>%
+  select(name, description, summary)
+
+# install.packages("rentrez")
+requireNamespace("rentrez")
+s <- rentrez::entrez_summary(db = "gene", id = entrez.ids)
+df <- unclass(s) %>%
+  dual(rbind) %>%
+  as.data.frame()
+df %>%
+  select(name, description, summary) %>%
+  ind2col("entrez") %>%
+  DT::datatable(escape = FALSE)
+```
+
+## Transcription factors and their targets
+
+```{r}
+tf <- "Smad7"
+```
+
+```{r}
+tf.effect <-
+  omnipath.tf %>%
+  filter(source_genesymbol == tf) %>%
+  mutate(effect = is_inhibition - is_stimulation) %>%
+  select(target = target_genesymbol, effect) %>%
+  filter(effect != 0) %>%
+  as.data.frame()
+```
+
+```{r}
+tf.effect %>%
+  filter(effect > 0) %>%
+  pull(target)
+```
+
+```{r}
+trg <- "Sdhb"
+
+sce_cb@assays@data$counts %>%
+  t() %>%
+  as.data.frame() %>%
+  select(x = tf, y = trg) %>%
+  ggplot(aes(x = log1p(x), y = log1p(y))) +
+  geom_point() +
+  labs(
+    x = paste(tf, "log1p-expression"),
+    y = paste(trg, "expression")
+  )
+```
+
+
+```{r}
+tf.pre <-
+  omnipath.tf %>%
+  filter(target_genesymbol == "Col1a1") %>%
+  mutate(effect = is_inhibition - is_stimulation) %>%
+  select(source = source_genesymbol, target = target_genesymbol, effect) %>%
+  as.data.frame() %>%
+  filter(effect != 0)
+```
+
+```{r}
+sce_cb %>%
+  `[`(intersect(tf.pre %>%
+    filter(effect > 0) %>%
+    pull(source) %>%
+    c("Tgfbr1"), rownames(.)), ) %>%
+  {
+    anno_col <- ((.)@colData %>%
+      as.data.frame() %>%
+      select(celltype, group = Group))
+
+    anno_row <- (dm_genes %>% select(cluster))
+
+    counts <-
+      (.)@assays@data$count %>%
+      log1p() %>%
+      {
+        # (.) - rowMeans(.)
+        # (.) / rowSums(.)
+      }
+
+    pheatmap::pheatmap(
+      counts,
+      show_colnames = FALSE,
+      cluster_cols = FALSE,
+      cluster_rows = TRUE,
+      treeheight_row = 0,
+      treeheight_col = 0,
+      # fontsize = 6,
+      color = grDevices::colorRampPalette(c("black", "yellow"))(10),
+      annotation_col = anno_col,
+      annotation_row = anno_row,
+      annotation_colors = list(
+        celltype = ramp(anno_col$celltype),
+        group = ramp(anno_col$group),
+        cluster = ramp(anno_row$cluster)
+      )
+    )
+  }
+```
+
+```{r}
+# sce_dm.col <- sce_dm %>% `[`(intersect(goi$col, rownames(.)), ) %>% `[`(, colSums(.@assays@data$counts) > 0) %>% scater_attach()
+# sce_cb.air <- sce_cb %>% `[`(intersect(goi$cell_resp, rownames(.)), ) %>% scater_attach()
+# sce_cb.gly <- sce_cb %>% `[`(intersect(goi$glycolysis, rownames(.)), ) %>% scater_attach()
+# sce_cb.mig <- sce_cb %>% `[`(intersect(goi$fib_mig, rownames(.)), ) %>% scater_attach()
+
+sce_dm.col@colData$celltype <- sce_dm.col@colData$subgroup
+
+# sce_dm.col %>% scater_show()
+
+sce_dm.col %>% (function(sce) {
+  sce %<>% `[`(, sce$subgroup %>% order())
+  # sce %<>% `[`(, sce@int_colData$reducedDims$UMAP[, 1] %>% order())
+
+  anno_col <- (sce@colData %>%
+    as.data.frame() %>%
+    select(celltype = subgroup, group = group))
+  anno_row <- (dm_genes %>% select(cluster))
+
+  counts <-
+    sce@assays@data$count %>%
+    log1p() %>%
+    {
+      # (.) - rowMeans(.)
+      # (.) / rowSums(.)
+    }
+
+  # anno_col %<>% mutate(umap = sce@int_colData$reducedDims$UMAP[, 1])
+
+  anno_col %<>% mutate(sum = colSums(counts))
+  # anno_col %<>% mutate(Mmp2 = sce_dm@assays@data$counts["Mmp2", colnames(sce_dm.col)])
+
+  pheatmap::pheatmap(
+    counts,
+    show_colnames = FALSE,
+    cluster_cols = FALSE,
+    cluster_rows = TRUE,
+    treeheight_row = 0,
+    treeheight_col = 0,
+    # fontsize = 6,
+    color = grDevices::colorRampPalette(c("black", "yellow"))(10),
+    annotation_col = anno_col,
+    # annotation_row = anno_row,
+    annotation_colors = list(
+      celltype = ramp(anno_col$celltype),
+      group = ramp(anno_col$group, palette = "Set2"),
+      cluster = ramp(anno_row$cluster)
+    )
+  )
+})
+```
+
+
+
+
+```{r, eval=FALSE, include=FALSE}
+#                         DRAFT
+
+genes <-
+  list(
+    gene_id = path_to("data/MSigDB/*/Mm.c2.cp.reactome.v7.1.entrez.rds") %>%
+      readRDS() %>%
+      `$`(REACTOME_CELL_CYCLE_MITOTIC)
+  ) %>%
+  merge(
+    org.Mm.eg.db::org.Mm.egSYMBOL2EG %>% as.data.frame(),
+    by = "gene_id"
+  ) %>%
+  pull(symbol, gene_id)
+
+f <- function(.) {
+  (.) %>% pull(symbol)
+}
+
+# cyclic_genes <-
+
+sce_dm %>%
+  `[`(intersect(genes, rownames(.)), ) %>%
+  `[`(, (.)$subgroup %in% c("healthy2")) %>%
+  {
+    (.)[
+      (.)@assays@data$counts %>%
+        data.frame(
+          cv = matrixStats::rowSds(.) / matrixStats::rowMeans2(.),
+          row.names = rownames(.)
+        ) %>%
+        slice_max(cv, n = 777) %>%
+        rownames(),
+    ]
+  } %>%
+  {
+    (.)[
+      ,
+      order(colSums(log1p((.)@assays@data$counts)))
+    ]
+  } %>%
+  {
+    # (.)@assays@data$counts %<>% t() %>% {. / rowSums(.)} %>% t()
+    (.)
+  } %>%
+  # {
+  #   pheatmap::pheatmap(
+  #     show_colnames = FALSE,
+  #     cluster_cols = FALSE,
+  #     cluster_rows = TRUE,
+  #     treeheight_row = 0,
+  #     treeheight_col = 0,
+  #     annotation_col = data.frame(
+  #       s = colSums(.)
+  #     )
+  #   )
+  # }
+
+  {
+    # .@assays@data$counts %<>% log1p()
+    .
+  } %>%
+  scater_attach() %>%
+  scater_show(color.by = "subgroup") %>%
+  gridExtra::grid.arrange()
+```

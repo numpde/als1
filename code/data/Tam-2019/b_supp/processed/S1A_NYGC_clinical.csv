@@ -1,0 +1,179 @@
+# Clinical information for the NYGC ALS Consortium samples
+# From 1-s2.0-S221112471931263X-mmc3.xlsx
+hra	tissue	gender	sample_group	C9orf72_repeat_expansion	ALS_subtype
+HRA-00013	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00014	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00015	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00016	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-TE
+HRA-00017	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00018	Frontal Cortex	Female	ALS Spectrum MND	Yes	ALS-Ox
+HRA-00019	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00020	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00021	Frontal Cortex	Female	Non-Neurological Control	No	NA
+HRA-00022	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00023	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-TE
+HRA-00025	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00026	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00055	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00056	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00057	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00058	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-TE
+HRA-00059	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00060	Motor Cortex (Medial)	Female	ALS Spectrum MND	Yes	ALS-Ox
+HRA-00061	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00062	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00063	Motor Cortex (Medial)	Female	Non-Neurological Control	No	NA
+HRA-00064	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00068	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00083	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00084	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-Glia
+HRA-00086	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Glia
+HRA-00088	Motor Cortex (Lateral)	Female	ALS Spectrum MND	Yes	ALS-Ox
+HRA-00089	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Glia
+HRA-00091	Motor Cortex (Lateral)	Female	Non-Neurological Control	No	NA
+HRA-00092	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00096	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00134	Motor Cortex	Female	ALS Spectrum MND	Yes	ALS-Ox
+HRA-00209	Frontal Cortex	Male	ALS Spectrum MND	NA	ALS-Ox
+HRA-00210	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00211	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00212	Frontal Cortex	Female	Non-Neurological Control	No	NA
+HRA-00213	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00214	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00215	Motor Cortex (Medial)	Male	ALS Spectrum MND	NA	ALS-Ox
+HRA-00216	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00217	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Glia
+HRA-00218	Motor Cortex (Medial)	Female	Non-Neurological Control	No	NA
+HRA-00219	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00220	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00221	Motor Cortex (Lateral)	Male	ALS Spectrum MND	NA	ALS-Ox
+HRA-00223	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00224	Motor Cortex (Lateral)	Female	Non-Neurological Control	No	NA
+HRA-00225	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Glia
+HRA-00226	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00240	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00241	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-TE
+HRA-00242	Frontal Cortex	Female	Non-Neurological Control	No	NA
+HRA-00243	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00244	Frontal Cortex	Male	ALS Spectrum MND	Yes	ALS-TE
+HRA-00245	Frontal Cortex	Female	ALS Spectrum MND	Yes	ALS-TE
+HRA-00246	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00247	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00248	Frontal Cortex	Male	ALS Spectrum MND	Yes	ALS-Ox
+HRA-00250	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00251	Motor Cortex (Medial)	Female	Non-Neurological Control	No	NA
+HRA-00252	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00255	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00256	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00285	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00286	Motor Cortex (Lateral)	Male	ALS Spectrum MND	Yes	ALS-Ox
+HRA-00287	Motor Cortex (Lateral)	Male	ALS Spectrum MND	Yes	ALS-Glia
+HRA-00288	Motor Cortex	Female	ALS Spectrum MND	Yes	ALS-Ox
+HRA-00296	Motor Cortex (Medial)	Female	ALS Spectrum MND ***	Yes	ALS-Glia
+HRA-00297	Motor Cortex (Lateral)	Female	ALS Spectrum MND ***	Yes	ALS-Glia
+HRA-00300	Frontal Cortex	Female	ALS Spectrum MND ***	Yes	ALS-Glia
+HRA-00304	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00305	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00308	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00312	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00313	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00316	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00321	Motor Cortex (Lateral)	Male	ALS Spectrum MND	Yes	ALS-TE
+HRA-00334	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Glia
+HRA-00335	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00338	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00350	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00351	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00354	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00358	Motor Cortex (Medial)	Female	ALS Spectrum MND	Yes	ALS-Glia
+HRA-00359	Motor Cortex (Lateral)	Female	ALS Spectrum MND	Yes	ALS-Glia
+HRA-00362	Frontal Cortex	Female	ALS Spectrum MND	Yes	ALS-Ox
+HRA-00366	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Glia
+HRA-00367	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Glia
+HRA-00373	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00374	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00377	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00381	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Glia
+HRA-00382	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-Glia
+HRA-00385	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Glia
+HRA-00387	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Glia
+HRA-00388	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-Glia
+HRA-00393	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00394	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00397	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00399	Motor Cortex (Medial)	Male	Other Neurological Disorders	No	NA
+HRA-00400	Motor Cortex (Lateral)	Male	Other Neurological Disorders	No	NA
+HRA-00405	Motor Cortex (Medial)	Male	Other Neurological Disorders	No	NA
+HRA-00406	Motor Cortex (Lateral)	Male	Other Neurological Disorders	No	NA
+HRA-00409	Frontal Cortex	Male	Other Neurological Disorders	No	NA
+HRA-00412	Motor Cortex (Lateral)	Male	Other Neurological Disorders	No	NA
+HRA-00415	Frontal Cortex	Male	Other Neurological Disorders	No	NA
+HRA-00421	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00423	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Glia
+HRA-00424	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-Glia
+HRA-00427	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00429	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00430	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00433	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00436	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00460	Frontal Cortex	Female	ALS Spectrum MND	Yes	ALS-TE
+HRA-00466	Frontal Cortex	Female	Other Neurological Disorders	No	NA
+HRA-00481	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-TE
+HRA-00487	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-TE
+HRA-00529	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-TE
+HRA-00535	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00543	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Glia
+HRA-00546	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00550	Frontal Cortex	Male	ALS Spectrum MND	Yes	ALS-TE
+HRA-00553	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00556	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00557	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00559	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Glia
+HRA-00561	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Glia
+HRA-00562	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00569	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-TE
+HRA-00571	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-TE
+HRA-00575	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-TE
+HRA-00578	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00581	Motor Cortex (Medial)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00582	Motor Cortex (Lateral)	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00590	Motor Cortex	Male	Non-Neurological Control	No	NA
+HRA-00595	Motor Cortex (Lateral)	Female	Non-Neurological Control	No	NA
+HRA-00596	Motor Cortex (Medial)	Male	Non-Neurological Control	No	NA
+HRA-00600	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-TE
+HRA-00603	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00604	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00611	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-00612	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-TE
+HRA-00615	Motor Cortex (Medial)	Female	ALS Spectrum MND	No	ALS-Glia
+HRA-00616	Motor Cortex (Lateral)	Female	ALS Spectrum MND	No	ALS-TE
+HRA-00621	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-00631	Motor Cortex	Female	ALS Spectrum MND	Yes	ALS-Ox
+HRA-00633	Motor Cortex	Male	ALS Spectrum MND	No	ALS-TE
+HRA-00654	Motor Cortex (Medial)	Male	Other Neurological Disorders	No	NA
+HRA-00655	Motor Cortex (Lateral)	Male	Other Neurological Disorders	No	NA
+HRA-00751	Frontal Cortex	Male	Non-Neurological Control	NA	NA
+HRA-00756	Frontal Cortex	Female	ALS Spectrum MND	NA	ALS-TE
+HRA-00773	Frontal Cortex	Female	ALS Spectrum MND	NA	ALS-TE
+HRA-00783	Frontal Cortex	Male	ALS Spectrum MND	NA	ALS-TE
+HRA-00788	Frontal Cortex	Female	Non-Neurological Control	NA	NA
+HRA-00792	Frontal Cortex	Male	ALS Spectrum MND	NA	ALS-Glia
+HRA-00871	Frontal Cortex	Female	Non-Neurological Control	NA	NA
+HRA-00925	Frontal Cortex	Male	ALS Spectrum MND	NA	ALS-Ox
+HRA-01179	Frontal Cortex	Male	Other Neurological Disorders	No	NA
+HRA-01218	Frontal Cortex	Male	ALS Spectrum MND	Yes	ALS-Glia
+HRA-01219	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-TE
+HRA-01222	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-01234	Frontal Cortex	Female	Non-Neurological Control	No	NA
+HRA-01236	Frontal Cortex	Female	Non-Neurological Control	No	NA
+HRA-01239	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-Ox
+HRA-01242	Frontal Cortex	Male	Non-Neurological Control	No	NA
+HRA-01251	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-TE
+HRA-01266	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Ox
+HRA-01269	Frontal Cortex	Female	ALS Spectrum MND	NA	ALS-Ox
+HRA-01349	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-TE
+HRA-01353	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-TE
+HRA-01357	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-Glia
+HRA-01361	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-TE
+HRA-01365	Frontal Cortex	Male	ALS Spectrum MND	No	ALS-TE
+HRA-01369	Frontal Cortex	Female	ALS Spectrum MND	No	ALS-TE

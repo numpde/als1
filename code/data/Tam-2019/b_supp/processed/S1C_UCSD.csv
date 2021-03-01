@@ -1,0 +1,22 @@
+# Clinical information of UCSD sALS samples
+# From 1-s2.0-S221112471931263X-mmc3.xlsx
+patient_id	rnaseq_id	tissue	diagnosis	age_of_death	PMI	gender	site_of_onset	disease_duration_years	C9orf72_repeat_expansion	ALS_subtype
+JR9	ALS-21, ALS-22	Motor Cortex	sALS	81	3	Male	Bulbar	2	No	ALS-Ox
+JR18	ALS-47, ALS-48	Motor Cortex	sALS	80	4	Female	Bulbar	2	No	ALS-TE
+JR27	ALS-75, ALS-76	Motor Cortex	sALS	74	4	Male	bulbar	3.25	No	ALS-Glia
+JR29	ALS-27, ALS-28	Motor Cortex	sALS	77	3	Female	Leg and foot	3	No	ALS-TE
+JR30	ALS-29, ALS-30	Motor Cortex	sALS/FTD	73	4.5	Male	Language & Respiratory 	2.5	No	ALS-Glia
+JR33	ALS-31, ALS-32	Motor Cortex	sALS	54	5	Male	Arm	6.5	No	ALS-TE
+JR34	ALS-43, ALS-44	Motor Cortex	sALS	81	3.5	Female	Bulbar	1	No	ALS-TE
+JR35	ALS-35, ALS-36	Motor Cortex	sALS	74	5	Female	Bulbar	5.75	No	ALS-TE
+JR36	ALS-37, ALS-38	Motor Cortex	sALS	73	5	Male	Leg	1	No	ALS-Glia
+JR47	ALS-39, ALS-40	Motor Cortex	sALS/FTD	65	7	Female	Bulbar	1.25	No	ALS-TE
+JR48	ALS-23, ALS-24	Motor Cortex	sALS	67	6	Male	Bulbar	1.75	No	ALS-TE
+JR60	ALS-41, ALS-42	Motor Cortex	sALS	58	3	Female	Bulbar	3	No	ALS-Ox
+JR61	ALS-45, ALS-46	Motor Cortex	sALS	72	8	Male	Arm	2	No	ALS-Glia
+JR39	Co-1, Co-2	Motor Cortex	Non-neurological control	77	2	Male	NA	NA	NA	NA
+JR44	Co-3, Co-4	Motor Cortex	Non-neurological control	80	5	Female	NA	NA	NA	NA
+JR65	Co-7, Co-8	Motor Cortex	Non-neurological control	82	4	Male	NA	NA	NA	NA
+JR67	Co-5, Co-6	Motor Cortex	Non-neurological control	77	4	Male	NA	NA	NA	NA
+JR70	Co-20, Co-21	Motor Cortex	Non-neurological control	Unknown	Unknown	Unknown	NA	NA	NA	NA
+JR73	Co-22, Co-23	Motor Cortex	Non-neurological control	Unknown	Unknown	Unknown	NA	NA	NA	NA

@@ -1,0 +1,79 @@
+---
+title: "Zoomable figures"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output: 
+  html_document
+editor_options:
+ chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(out.width = "100%")
+```
+
+
+```{js}
+// https://stackoverflow.com/questions/46666559/base64-image-open-in-new-tab-window-is-not-allowed-to-navigate-top-frame-naviga
+function openBase64InNewTab(data, mimeType) {
+    var byteCharacters = atob(data);
+    var byteNumbers = new Array(byteCharacters.length);
+    for (var i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    var byteArray = new Uint8Array(byteNumbers);
+    var file = new Blob([byteArray], { type: mimeType + ';base64' });
+    var fileURL = URL.createObjectURL(file);
+    window.open(fileURL);
+}
+
+$(document).ready(
+  function() {
+    $("img.zoomable").on("click", function() {
+      //var src = $(this).attr('src');
+      //src = src.substr(src.indexOf("base64") + 7);
+      //openBase64InNewTab(src, "image/png");
+      
+      //window.open($(this).attr('src'));
+      
+      var el = $(this).clone();
+      el.attr("width", "2048px");
+      
+      window.open().document.write(el.wrap('<p>').parent().html());
+      
+      return;
+      
+      var el = $(this).clone();
+      el.removeClass("zoomable");
+      el.removeAttr("width");
+      window.open().document.write(
+        '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=.5, maximum-scale=12.0, minimum-scale=.25, user-scalable=yes"/></head>' +
+        el.wrap('<body>').parent().html() + 
+        '</html>'
+      );
+    });
+  }
+);
+```
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(dplyr)
+})
+```
+
+
+```{r, out.extra='id="myfig" class="zoomable"', dpi=36, out.width='20%', results='hide'}
+list(
+  randu %>% ggplot(aes(x = x, y = y)) + geom_point() + ggtitle("Zoomable 1"),
+  randu %>% ggplot(aes(x = x, y = z)) + geom_point() + ggtitle("Zoomable 2")
+)
+```
+
+```{r, out.extra='class="non-zoomable"', dpi=10, out.width='20%'}
+randu %>% ggplot(aes(x = x, y = y)) + geom_point() + ggtitle("non-zoomable")
+```
+

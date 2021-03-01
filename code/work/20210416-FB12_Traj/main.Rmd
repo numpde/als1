@@ -1,0 +1,751 @@
+---
+title: "FB1/FB2 trajectories"
+author: "RA ([numpde](https://github.com/numpde/))"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+editor_options:
+ chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(out.width = "100%")
+```
+
+## Preliminaries {.tabset .tabset-fade}
+
+
+### Introduction
+
+[tradeSeq](http://bioconductor.org/packages/release/bioc/vignettes/tradeSeq/inst/doc/tradeSeq.html)
+
+### Setup
+
+```{r}
+suppressPackageStartupMessages({
+  # install.packages("kableExtra")
+  requireNamespace("kableExtra")
+
+  # install.packages("crunch")
+  requireNamespace("crunch")
+
+  # https://rstudio.github.io/DT/
+  # install.packages("DT")
+  requireNamespace("DT")
+
+  # may need to say "don't restart session"
+  # install.packages("RCurl")
+  requireNamespace("RCurl")
+
+  # install.packages("dplyr")
+  library(dplyr)
+  # install.packages("ggplot2")
+  library(ggplot2)
+
+  #
+  requireNamespace("magrittr")
+  `%<>%` <- magrittr::`%<>%`
+  `%>%` <- magrittr::`%>%`
+
+  #
+  requireNamespace("tidyr")
+
+  # BiocManager::install("org.Mm.eg.db")
+  requireNamespace("org.Mm.eg.db")
+
+  # https://www.bioconductor.org/packages/release/bioc/vignettes/goseq/inst/doc/goseq.pdf
+  # BiocManager::install("goseq")
+  requireNamespace("goseq")
+
+  # https://vroom.r-lib.org/articles/vroom.html
+  # install.packages("vroom")
+  requireNamespace("vroom")
+
+  # BiocManager::install("DESeq2")
+  requireNamespace("DESeq2")
+
+  # BiocManager::install("scater")
+  requireNamespace("scater")
+
+  # BiocManager::install("scran")
+  requireNamespace("scran")
+
+  # BiocManager::install("igraph")
+  requireNamespace("igraph")
+
+  # install.packages("pheatmap")
+  requireNamespace("pheatmap")
+  # install.packages("stringr")
+  requireNamespace("stringr")
+  # install.packages("reshape2")
+  requireNamespace("reshape2")
+  # install.packages("pathlibr")
+  requireNamespace("pathlibr")
+  # install.packages("pbapply")
+  requireNamespace("pbapply")
+
+  # install.packages("Rtsne")
+  requireNamespace("Rtsne")
+  # install.packages("uwot")
+  requireNamespace("uwot")
+
+  # avoid importing `exprs` that leads to clashes
+  requireNamespace("rlang")
+
+  # install.packages("Seurat")
+  requireNamespace("Seurat")
+
+  # BiocManager::install("TrajectoryUtils") # Didn't work
+  # devtools::install_github("LTLA/TrajectoryUtils@e943606")
+  # BiocManager::install("kstreet13/slingshot@25fc566")
+  requireNamespace("slingshot")
+
+  # BiocManager::install("tradeSeq")
+  requireNamespace("tradeSeq")
+
+  # Monocle3
+  # https://cole-trapnell-lab.github.io/monocle3/docs/installation/
+  # BiocManager::install(c("BiocGenerics", "DelayedArray", "DelayedMatrixStats", "limma", "S4Vectors", "SingleCellExperiment", "SummarizedExperiment", "batchelor", "Matrix.utils"))
+  # install.packages("devtools")
+  # devtools::install_github("cole-trapnell-lab/leidenbase@8c52ebc")
+  # apt install libudunits2-dev libgdal-dev libgeos-dev libproj-dev
+  # devtools::install_github("cole-trapnell-lab/monocle3@4c01d89")
+  # requireNamespace("monocle3") #
+})
+```
+
+### SessionInfo
+
+```{r}
+sessionInfo()
+```
+
+### PRG
+
+```{r}
+set.seed(42)
+```
+
+### Paths
+
+```{r}
+BASEPATH <- pathlibr::Path$new(".")
+stopifnot("main.Rmd" %in% names(BASEPATH$dir))
+```
+
+```{r}
+path_to <- (function(.) Sys.glob(BASEPATH$join("../..")$join(.)$show))
+```
+
+```{r}
+out_file <- (function(.) BASEPATH$join("output")$join(.)$show)
+dir.create(out_file(""), showWarnings = FALSE)
+```
+
+### Plotting
+
+```{r}
+ggplot2::theme_set(theme_light(base_size = 15))
+```
+
+```{r}
+kable <- function(.) {
+  kableExtra::kbl(., align = "c") %>%
+    kableExtra::kable_paper("hover", full_width = F)
+}
+```
+
+```{r}
+options(DT.options = list(
+  pageLength = 16,
+  language = list(search = "Filter:")
+))
+```
+
+```{r}
+as.link <-
+  function(x) {
+    dplyr::case_when(
+      # If x is like GO:003453
+      startsWith(x, "GO:") ~ paste0(
+        "<a target='_blank'",
+        "href='", "http://amigo.geneontology.org/amigo/term/", x, "'",
+        ">", x, "</a>"
+      ),
+      # Otherwise try this
+      TRUE ~ paste0(
+        "<a target='_blank'",
+        "href='", "http://www.informatics.jax.org/marker/summary?nomen=", x, "'",
+        ">", x, "</a>"
+      )
+    )
+  }
+```
+
+```{r}
+show_de_table <- function(.) {
+  (.) %>%
+    select(base = baseMean, l2fc = log2FoldChange, p = pvalue, padj) %>%
+    ind2col("symbol") %>%
+    mutate(symbol = as.link(symbol)) %>%
+    DT::datatable(escape = FALSE) %>%
+    DT::formatSignif(c("base", "l2fc", "p", "padj"), digits = 3)
+}
+```
+
+```{r}
+show_go_table <- function(.) {
+  (.) %>%
+    dplyr::select("category", "overrep.p", "#DE", "#cat", "term", "GO") %>%
+    DT::datatable(escape = FALSE) %>%
+    DT::formatSignif("overrep.p", digits = 3)
+}
+```
+
+
+### Dataframes
+
+```{r}
+# Use first column as index
+by_col1 <- (function(.) tibble::column_to_rownames(., colnames(.)[1]))
+# Use index as new column `name`
+ind2col <- (function(., name) tibble::rownames_to_column(., var = name))
+```
+
+```{r}
+arrange.like <- (function(X, T) X[rownames(T), , drop = FALSE])
+rows.of <- (function(rows, X) X[rows, , drop = FALSE])
+```
+
+```{r}
+Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 4)
+from_csv <- function(.) {
+  vroom::vroom(., del = "\t", progress = FALSE) %>%
+    by_col1() %>%
+    suppressMessages()
+}
+```
+
+A call to `to_csv` should be preceded by
+`ind2col("name for index")`
+to write the row names.
+
+```{r}
+to_csv <- function(., f) {
+  vroom::vroom_write(., out_file(f), delim = "\t")
+}
+```
+
+The following function constructs 
+a `SingleCellExperiment`,
+while checking consistency of sample names.
+
+```{r}
+make_sce <- function(counts, coldata) {
+  # Check that samples in counts = genes x samples 
+  # are ordered as in coldata = samples x metafields
+  stopifnot(assertthat::are_equal(colnames(counts), rownames(coldata)))
+  SingleCellExperiment::SingleCellExperiment(
+    assays = list(counts = counts), colData = coldata
+  )
+}
+```
+
+
+### Misc
+
+--
+
+
+
+
+## Datasets {.tabset .tabset-fade .tabset-pills}
+
+### Betsholtz, 2018 {.tabset .tabset-fade}
+
+#### About
+
+[GSE98816](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE98816):
+single cell RNA-seq of mouse brain vascular transcriptomes.
+
+#### Load
+
+```{r}
+sce_bth_mb <-
+  make_sce(
+      counts = (
+        path_to("*/Betsholtz-2018/*/expr.csv.gz") %>%
+          from_csv() %>%
+          t()
+      ),
+      coldata = (
+        path_to("*/Betsholtz-2018/*/meta.csv.gz") %>%
+          from_csv()
+      )
+  ) %>%
+  # Only keep FB
+  `[`(, (.)$celltype %in% c("FB1", "FB2")) %>%
+  # Order by cell type
+  `[`(, order((.)$celltype))
+
+# conversion to matrix takes long, hence do it here
+sce_bth_mb@assays@data$counts %<>% as.matrix()
+```
+
+```{r, include=FALSE}
+# Test
+sce_bth_mb %>% DESeq2::DESeqDataSet(design = ~celltype)
+```
+
+
+```{r, include=FALSE}
+gc()
+```
+
+#### Diagnostics
+
+Attach diagnostics by scater.
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+sce_bth_mb %<>% (function(sce) {
+  scater::addPerCellQC(
+    x = sce,
+    subsets = list(Mito = grep("mt-", rownames(sce)))
+  ) %>%
+    # Used for the heatmap
+    scater::logNormCounts() %>%
+    # Not all are used further below:
+    scater::runPCA(name = "PCA", ncomponents = 20) %>%
+    scater::runTSNE(perplexity = 10, dimred = "PCA") %>%
+    scater::runUMAP()
+})
+```
+
+Projections:
+
+```{r, message=FALSE}
+sce_bth_mb %>%
+  {
+    function(which_dimred) {
+      scater::plotReducedDim(
+        dimred = which_dimred,
+        object = (.),
+        colour_by = "celltype"
+      ) +
+        scale_color_brewer(palette = "Set1", name = "Cell type")
+    }
+  } %>%
+  {
+    gridExtra::grid.arrange((.)("PCA"), (.)("TSNE"), (.)("UMAP"), nrow = 3)
+  }
+```
+
+
+### AB -- Mouse ctx & hip (10x) {.tabset .tabset-fade}
+
+#### About
+
+"Mouse Whole Cortex and Hippocampus 10x"
+dataset
+from Allen Brain, 2020:
+[[explore](https://celltypes.brain-map.org/rnaseq/mouse_ctx-hip_10x)],
+[[download](https://portal.brain-map.org/atlases-and-data/rnaseq/mouse-whole-cortex-and-hippocampus-10x)],
+[[protocols](https://portal.brain-map.org/atlases-and-data/rnaseq/protocols-mouse-cortex-and-hippocampus)].
+
+The dataset contains ~1M cells.
+We have [selected](../../data/AllenBrain/Mouse-WCH-2020) ~31k cells
+of type "Astro", "Endo" and "VLMC".
+
+#### Load
+
+```{r, include=FALSE}
+sce_abm_ch <-
+  make_sce(
+    counts = (
+      path_to("*/AllenBrain/Mouse-WCH*/*fewer_cells/data.*.gz") %>%
+        from_csv() %>%
+        `[`(, sort(colnames(.)))
+    ),
+    coldata = (
+      path_to("*/AllenBrain/Mouse-WCH*/f*cells/meta.*.gz") %>%
+        from_csv() %>%
+        `[`(sort(rownames(.)), )
+    )
+  ) %>%
+  # Only keep VLMC
+  `[`(, (.)$subclass_label == "VLMC") %>%
+  # Order by cell type: sometimes convenient below, esp. for plotting
+  `[`(, order((.)$cell_type_alias_label))
+
+# conversion to matrix takes long, hence do it here
+sce_abm_ch@assays@data$counts %<>% as.matrix()
+```
+
+```{r, include=FALSE}
+# Test
+sce_abm_ch %>% DESeq2::DESeqDataSet(design = ~cell_type_alias_label)
+```
+
+
+```{r, include=FALSE}
+gc()
+```
+
+
+#### Diagnostics
+
+Attach diagnostics by scater.
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+sce_abm_ch %<>% (function(sce) {
+  scater::addPerCellQC(
+    x = sce,
+    subsets = list(Mito = grep("mt-", rownames(sce)))
+  ) %>%
+    # Used for the heatmap
+    scater::logNormCounts() %>%
+    # Not all are used further below:
+    scater::runPCA(name = "PCA", ncomponents = 20) %>%
+    scater::runTSNE(perplexity = 10, dimred = "PCA") %>%
+    scater::runUMAP()
+})
+```
+
+Projections:
+
+```{r, message=FALSE}
+sce_abm_ch %>%
+  {
+    function(which_dimred) {
+      scater::plotReducedDim(
+        dimred = which_dimred,
+        object = (.),
+        colour_by = "cell_type_alias_label"
+      ) +
+        scale_color_brewer(palette = "Set1", name = "Cell type")
+    }
+  } %>%
+  {
+    gridExtra::grid.arrange((.)("PCA"), (.)("TSNE"), (.)("UMAP"), nrow = 3)
+  }
+```
+
+
+
+## Analysis 
+
+### Slingshot pseudotime
+
+Compute trajectory / pseudotime.
+
+```{r, message=FALSE, warning=FALSE, paged.print=TRUE, results='hide'}
+sce_bth_mb.slingshot <-
+  sce_bth_mb %>%
+  slingshot::slingshot(
+    reducedDim = "PCA",
+    clusterLabels = "celltype",
+    # If we do not provide the start-cluster and end-cluster,
+    # slingshot finds the same lineage.
+    start.clus = "FB1",
+    end.clus = "FB2"
+  ) %>%
+  # This is of class PseudotimeOrdering, which
+  # looks like the original SCE but DESeq2 doesn't like it.
+  # So, we downgrade to avoid confusion:
+  slingshot::SlingshotDataSet()
+```
+
+```{r}
+sce_bth_mb.slingshot %>%
+  slingshot::slingLineages() %>%
+  as.data.frame() %>%
+  kable()
+```
+
+Attach the pseudotime.
+Accessible using `...$Lineage1`.
+
+```{r}
+sce_bth_mb@colData %<>%
+  cbind(sce_bth_mb.slingshot %>% slingshot::slingPseudotime())
+```
+
+Save the lineage/s to disk.
+
+```{r}
+sce_bth_mb.slingshot %>% 
+  slingshot::slingPseudotime() %>% 
+  as.data.frame %>% 
+  ind2col("sample") %>%
+  to_csv("pseudotime.csv")
+```
+
+Show in plot.
+
+```{r}
+sce_bth_mb %>%
+  {
+    cbind(
+      SingleCellExperiment::reducedDim(., type = "PCA"),
+      data.frame(
+        pseudotime = (.)$Lineage1,
+        celltype = (.)$celltype
+      )
+    )
+  } %>%
+  as.data.frame() %>%
+  ggplot(aes(x = PC1, y = PC2, color = pseudotime, shape = celltype)) +
+  geom_point(size = 5) +
+  ggplot2::scale_color_gradient(low = "Blue", high = "Red")
+```
+
+### Early vs late
+
+We partition the samples 
+into "early" (first quarter) and "late" (last quarter)
+in terms of pseudotime,
+and find DE genes between those two groups.
+These DE genes will narrow down the search
+of the "association test" below.
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+sce_bth_mb %<>%
+  (function(sce) {
+    sce$Lineage1 %>%
+      list(
+        is_early = ((.) < quantile((.), p = c(0.25))),
+        is_late = ((.) >= quantile((.), p = c(0.75)))
+      ) %>%
+      with({
+        sce$early <- as.factor(is_early)
+        sce$late <- as.factor(is_late)
+
+        sce
+      })
+  })
+```
+
+Overview.
+
+```{r}
+sce_bth_mb$celltype %>%
+  unique() %>%
+  sort() %>%
+  sapply(function(ct) {
+    sce_bth_mb %>% {
+      ii <- ((.)$celltype == ct)
+      c(
+        early = sum((.)$early[ii] == TRUE),
+        neither = sum(((.)$early[ii] == FALSE) & ((.)$late[ii] == FALSE)),
+        late = sum((.)$late[ii] == TRUE)
+      )
+    }
+  }) %>%
+  kable()
+```
+
+Find DE genes between "early" and "late".
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+de_results.late_vs_early <-
+  sce_bth_mb %>%
+  # Only keep the early and the late
+  `[`(, ((.)$early == TRUE) | ((.)$late == TRUE)) %>%
+  {
+    (.) %>%
+      DESeq2::DESeqDataSet(design = ~early) %>%
+      DESeq2::estimateSizeFactors() %>%
+      DESeq2::DESeq(quiet = TRUE, fitType = "local") %>%
+      DESeq2::results()
+  } %>%
+  as.data.frame() %>%
+  slice_min(pvalue, n = 777)
+```
+
+```{r}
+de_results.late_vs_early %>%
+  show_de_table()
+```
+
+### GO term enrichment {.tabset .tabset-fade}
+
+#### Compute 
+
+```{r}
+# Number of early/late genes.
+n <- 33
+```
+
+```{r}
+enriched_go_terms <-
+  de_results.late_vs_early %>%
+  {
+    list(
+      up_early = (.) %>% filter(log2FoldChange > 0),
+      up_late = (.) %>% filter(log2FoldChange < 0)
+    )
+  } %>%
+  lapply(function(.) {
+    (.) %>%
+      arrange(pvalue) %>%
+      rownames()
+  }) %>%
+  within({
+    f <- (function(x) x[1:5] %>% paste(collapse = ", "))
+    print(paste("Up early:", f(up_early), "..."))
+    print(paste("Up late: ", f(up_late), "..."))
+    rm(f)
+  }) %>%
+  lapply(function(de_results) {
+    de_results %>%
+      data.frame(symbol = .) %>%
+      slice_head(n = n) %>%
+      # Get the Entrez IDs of our genes
+      merge(
+        org.Mm.eg.db::org.Mm.egSYMBOL2EG %>% as.data.frame(),
+        by = "symbol"
+      ) %>%
+      pull(gene_id) %>%
+      # Enrichment analysis
+      limma::goana(species = "Mm") %>%
+      # Limit selection
+      filter(P.DE <= 0.05) %>%
+      arrange(P.DE) %>%
+      # Format for display
+      ind2col("category") %>%
+      mutate(category = as.link(category)) %>%
+      rename(
+        # new name = old name
+        "overrep.p" = P.DE, "#DE" = DE, "#cat" = N, "GO" = Ont, "term" = Term
+      )
+  })
+```
+
+#### Early up
+
+GO terms associated with `r n` "early" genes.
+
+```{r}
+enriched_go_terms$up_early %>% show_go_table()
+```
+
+#### Late up
+
+GO terms associated with `r n` "late" genes.
+
+```{r}
+enriched_go_terms$up_late %>% show_go_table()
+```
+
+
+### Association test
+
+From [tradeSeq](http://bioconductor.org/packages/release/bioc/vignettes/tradeSeq/inst/doc/tradeSeq.html):
+`associationTest` is testing the null hypothesis that all smoother coefficients are equal to each other. This can be interpreted as testing whether the average gene expression is significantly changing along pseudotime.
+
+```{r}
+tradeseq.assotest <-
+  sce_bth_mb %>%
+  # Reduce the geneset for efficiency
+  `[`(rownames(de_results.late_vs_early), ) %>%
+  {
+    tradeSeq::fitGAM(
+      (.)@assays@data$counts,
+      sds = sce_bth_mb.slingshot,
+      parallel = FALSE
+    )
+  } %>%
+  tradeSeq::associationTest()
+```
+
+Order cells by pseudotime
+and
+genes by log-fold change
+(indicating early-vs-late).
+We normalize genewise for better visibilty.
+
+```{r}
+sce_bth_mb %>%
+  list(
+    sce = .,
+    # Order by pseudotime (drop NA's)
+    pst = order((.)$Lineage1, na.last = NA),
+    # Extract the lineage-associated genes
+    top = tradeseq.assotest %>%
+      # Some pvalue are zero => the order is not stable? => use waldStat
+      slice_max(order_by = waldStat, n = 55) %>%
+      rownames() %>%
+      # Order by LFC (negative to positive)
+      `[`(order(de_results.late_vs_early[(.), ]$log2FoldChange))
+  ) %>%
+  with({
+    # Most-associated genes and order by pseudotime
+    sce[top, pst]
+  }) %>%
+  {
+    pheatmap::pheatmap(
+      (.)@assays@data$count %>% log1p() %>% {
+        (.) / rowSums(.)
+      },
+      show_colnames = FALSE,
+      cluster_cols = FALSE,
+      cluster_rows = FALSE,
+      treeheight_row = 0,
+      treeheight_col = 0,
+      fontsize = 6,
+      color = grDevices::colorRampPalette(c("white", "black"))(10),
+      annotation_col = (
+        (.)@colData %>%
+          as.data.frame() %>%
+          select(celltype, Lineage1)
+      )
+    )
+  }
+```
+
+
+Look at the same genes
+for VLMC from the AB Mouse WCH dataset.
+
+```{r}
+sce_abm_ch %>%
+    list(
+    sce = .,
+    # Extract the same lineage-associated genes
+    top = tradeseq.assotest %>%
+      slice_max(order_by = waldStat, n = 55) %>%
+      rownames() %>%
+      `[`(order(de_results.late_vs_early[(.), ]$log2FoldChange))
+  ) %>%
+  with({
+    # Most-associated genes
+    sce[top[top %in% rownames(sce)], ]
+  }) %>% {
+    pheatmap::pheatmap(
+      (.)@assays@data$count %>% log1p(),
+      show_colnames = FALSE,
+      cluster_cols = FALSE,
+      cluster_rows = FALSE,
+      treeheight_row = 0,
+      treeheight_col = 0,
+      fontsize = 6,
+      color = grDevices::colorRampPalette(c("white", "black"))(10),
+      annotation_col = (
+        (.)@colData %>%
+          as.data.frame() %>%
+          select(cell_type_alias_label)
+      )
+    )
+  }
+```
+
+
+
+```{r include=FALSE}
+knitr::knit_exit()
+```
+
+

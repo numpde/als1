@@ -1,0 +1,10 @@
+Mural6	377
+Mural3	369
+Mural4	369
+Mural5	369
+EC6	364
+EC5	361
+EC3	361
+EC4	359
+Pdgfra2	150
+Pdgfra1	107

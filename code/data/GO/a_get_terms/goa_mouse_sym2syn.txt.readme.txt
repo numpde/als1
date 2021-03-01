@@ -1,0 +1,4 @@
+{
+  "source": "ftp://ftp.ebi.ac.uk/pub/databases/GO/goa/MOUSE/goa_mouse.gaf.gz",
+  "datetime": "2021-03-15 18:23:18.839240+00:00"
+}

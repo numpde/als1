@@ -1,0 +1,59 @@
+---
+title: "Make a list of figures and show it"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output: 
+  html_document
+editor_options:
+ chunk_output_type: console
+---
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(dplyr)
+  requireNamespace("scater")
+  requireNamespace("SingleCellExperiment")
+})
+```
+
+
+```{r}
+plots <- function() {
+  print("print")
+  cat("cat")
+  message("message")
+  warning("warning")
+  
+  scater::mockSCE(ngene = 77, ncells = 33) %>%
+    scater::logNormCounts() %>%
+    scater::runPCA() %>%
+    SingleCellExperiment::reducedDim("PCA") %>%
+    as.data.frame() %>%
+    {
+      list(
+        f12 = ggplot(., aes(x = PC1, y = PC2)) + geom_point(),
+        f22 = ggplot(., aes(x = PC2, y = PC3)) + geom_point()
+      )
+    }
+}
+```
+
+```{r, message=FALSE, warning=TRUE, results='hide'}
+plots()
+```
+
+```{r, results='hide'}
+(0:1) %>% lapply(function(i) {
+  randu %>% 
+    filter(round(z) == i) %>%
+    ggplot(aes(x = x, y = y)) + geom_point() + ggtitle(i)
+})
+```
+
+
+
+<div class="footer">Copyright &copy; John Doe 2020</div>
+
+
+

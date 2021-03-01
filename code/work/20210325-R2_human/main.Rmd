@@ -1,0 +1,321 @@
+---
+title: "R2 -- human"
+author: "RA ([numpde](https://github.com/numpde/))"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+editor_options:
+ chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Preliminaries {.tabset .tabset-fade}
+
+
+### Introduction
+
+--
+  
+
+### Setup
+
+```{r}
+suppressPackageStartupMessages({
+  # install.packages("kableExtra")
+  requireNamespace("kableExtra")
+
+  # install.packages("crunch")
+  requireNamespace("crunch")
+
+  # https://rstudio.github.io/DT/
+  # install.packages("DT")
+  requireNamespace("DT")
+
+  # may need to say "don't restart session"
+  # install.packages("RCurl")
+  requireNamespace("RCurl")
+
+  # install.packages("dplyr")
+  library(dplyr)
+  # install.packages("ggplot2")
+  library(ggplot2)
+
+  #
+  requireNamespace("tidyr")
+
+  # BiocManager::install("org.Mm.eg.db")
+  requireNamespace("org.Mm.eg.db")
+
+  # https://www.bioconductor.org/packages/release/bioc/vignettes/goseq/inst/doc/goseq.pdf
+  # BiocManager::install("goseq")
+  requireNamespace("goseq")
+
+  # https://vroom.r-lib.org/articles/vroom.html
+  # install.packages("vroom")
+  requireNamespace("vroom")
+
+  # BiocManager::install("DESeq2")
+  requireNamespace("DESeq2")
+
+  # BiocManager::install("scater")
+  requireNamespace("scater")
+
+  # BiocManager::install("scran")
+  requireNamespace("scran")
+
+  # BiocManager::install("igraph")
+  requireNamespace("igraph")
+
+  # install.packages("pheatmap")
+  requireNamespace("pheatmap")
+  # install.packages("stringr")
+  requireNamespace("stringr")
+  # install.packages("reshape2")
+  requireNamespace("reshape2")
+  # install.packages("pathlibr")
+  requireNamespace("pathlibr")
+  # install.packages("pbapply")
+  requireNamespace("pbapply")
+
+  # install.packages("Rtsne")
+  requireNamespace("Rtsne")
+  # install.packages("uwot")
+  requireNamespace("uwot")
+
+  # avoid importing `exprs` that leads to clashes
+  requireNamespace("rlang")
+})
+```
+
+### SessionInfo
+
+```{r}
+sessionInfo()
+```
+
+### Paths
+
+```{r}
+BASEPATH <- pathlibr::Path$new(".")
+stopifnot("main.Rmd" %in% names(BASEPATH$dir))
+```
+
+```{r}
+path_to <- (function(.) Sys.glob(BASEPATH$join("../..")$join(.)$show))
+```
+
+### Plotting
+
+```{r}
+ggplot2::theme_set(theme_light(base_size = 15))
+```
+
+```{r}
+kable <- function(.) {
+  kableExtra::kbl(., align = "c") %>%
+    kableExtra::kable_paper("hover", full_width = F)
+}
+```
+
+```{r}
+options(DT.options = list(
+  pageLength = 16,
+  language = list(search = "Filter:")
+))
+```
+
+```{r}
+link <-
+  function(x) {
+    dplyr::case_when(
+      # If x is like GO:003453
+      startsWith(x, "GO:") ~ paste0(
+        "<a target='_blank'",
+        "href='", "http://amigo.geneontology.org/amigo/term/", x, "'",
+        ">", x, "</a>"
+      ),
+      # Otherwise try this
+      TRUE ~ paste0(
+        "<a target='_blank'",
+        "href='", "http://www.informatics.jax.org/marker/summary?nomen=", x, "'",
+        ">", x, "</a>"
+      )
+    )
+  }
+```
+
+### Dataframes
+
+```{r}
+# Use first column as index
+by_col1 <- (function(.) tibble::column_to_rownames(., colnames(.)[1]))
+# Use index as new column `name`
+ind2col <- (function(., name) tibble::rownames_to_column(., var = name))
+```
+
+```{r}
+arrange.like <- (function(X, T) X[rownames(T), , drop = FALSE])
+rows.of <- (function(rows, X) X[rows, , drop = FALSE])
+```
+
+```{r}
+Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 4)
+from_csv <- function(.) {
+  vroom::vroom(., del = "\t", progress = FALSE) %>%
+    by_col1() %>%
+    suppressMessages()
+}
+```
+
+
+### Misc
+
+```{r}
+# Wrap functions that do `library(...)`
+# and force-detach all attached packages
+unattach_packages <- function(f) {
+  # install.packages("crunch")
+  requireNamespace("crunch")
+
+  # wrapper for f
+  function(...) {
+    base::with(
+      crunch::ContextManager(
+        enter = base::search,
+        exit = function() {
+          for (pkg in setdiff(base::search(), enter)) {
+            base::detach(pkg, character.only = TRUE, force = TRUE)
+          }
+        },
+        # this overwrites the variable `enter`, if existent
+        as = "enter"
+      ),
+      {
+        f(...)
+      }
+    )
+  }
+}
+
+# Usage:
+# unattach_packages(function(x, y) { library(goseq); x + y })(1, 2)
+```
+
+
+
+
+## Datasets {.tabset .tabset-fade .tabset-pills}
+
+### Notes
+
+This is just a backup of 
+the human part of "R2".
+
+### AB -- Human M1 (10x) {.tabset .tabset-fade}
+
+#### Load
+
+Single-nucleus transcriptomes from 76533 nuclei
+[[src](https://portal.brain-map.org/atlases-and-data/rnaseq/human-m1-10x)].
+
+```{r, cache=TRUE}
+# AllenBrain-Human M1
+sce_abh_m1 <- SingleCellExperiment::SingleCellExperiment(
+  assays = list(
+    counts = (
+      path_to("*/AllenBrain/Human-M1*/f*cells/data.*.gz") %>%
+        from_csv() %>%
+        as.matrix()
+    )
+  ),
+  colData = (
+    path_to("*/AllenBrain/Human-M1*/f*cells/meta.*.gz") %>%
+      from_csv()
+  )
+)
+```
+
+#### Cell types
+
+```{r}
+exclude_celltypes <- c("Astro", "Endo", "Micro-PVM", "OPC")
+```
+
+```{r}
+sce_abh_m1$subclass_label %>%
+  data.frame(x = .) %>%
+  ggplot() +
+  aes(x = x, fill = if_else(x %in% exclude_celltypes, "drop", "keep")) +
+  geom_bar() +
+  scale_y_log10() +
+  # hist_theme +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(a = 0, hjust = 0.5),
+    legend.title = element_blank(),
+  )
+```
+
+Filter cell types.
+
+```{r, cache=TRUE}
+sce_abh_m1 <-
+  sce_abh_m1 %>% {
+    (.)[, !((.)$subclass_label %in% exclude_celltypes)]
+  }
+```
+
+#### Diagnostics
+
+
+```{r, cache=TRUE}
+sce_abh_m1 <-
+  sce_abh_m1 %>%
+  {
+    scater::addPerCellQC(
+      x = (.),
+      subsets = list(Mito = grep("mt-", rownames(.)))
+    )
+  } %>%
+  scater::logNormCounts() %>%
+  scater::runPCA(name = "PCA", ncomponents = 25) %>%
+  scater::runTSNE(perplexity = 10, dimred = "PCA") %>%
+  scater::runUMAP()
+```
+
+
+```{r}
+sce_abh_m1 %>%
+  {
+    function(dimred) {
+      scater::plotReducedDim(object = (.), dimred = dimred)
+    }
+  } %>%
+  {
+    gridExtra::grid.arrange((.)("PCA"), (.)("UMAP"), nrow = 1)
+  }
+```
+
+
+
+
+```{r include=FALSE}
+knitr::knit_exit()
+```
+
+
+
+
+
+
+
+
+## Notes
+
+"echo = FALSE": prevent printing of the R code that generated the plot.
+

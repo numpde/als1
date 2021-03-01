@@ -1,0 +1,1017 @@
+---
+title: "R2"
+author: "RA ([numpde](https://github.com/numpde/))"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+editor_options:
+ chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Preliminaries {.tabset .tabset-fade}
+
+
+### Introduction
+
+Tools:
+[scater](https://bioconductor.org/packages/3.12/bioc/vignettes/scater/inst/doc/overview.html),
+[SingleCellExperiment](http://bioconductor.org/packages/release/bioc/html/SingleCellExperiment.html),
+[igraph](https://nbisweden.github.io/single-cell_sib_scilifelab/session-clustering/clustering.html),
+[DESeq2](https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html),
+etc.
+  
+
+### Setup
+
+```{r}
+suppressPackageStartupMessages({
+  # install.packages("kableExtra")
+  requireNamespace("kableExtra")
+
+  # install.packages("crunch")
+  requireNamespace("crunch")
+
+  # https://rstudio.github.io/DT/
+  # install.packages("DT")
+  requireNamespace("DT")
+
+  # may need to say "don't restart session"
+  # install.packages("RCurl")
+  requireNamespace("RCurl")
+
+  # install.packages("dplyr")
+  library(dplyr)
+  # install.packages("ggplot2")
+  library(ggplot2)
+
+  #
+  requireNamespace("tidyr")
+
+  # BiocManager::install("org.Mm.eg.db")
+  requireNamespace("org.Mm.eg.db")
+
+  # https://www.bioconductor.org/packages/release/bioc/vignettes/goseq/inst/doc/goseq.pdf
+  # BiocManager::install("goseq")
+  requireNamespace("goseq")
+
+  # https://vroom.r-lib.org/articles/vroom.html
+  # install.packages("vroom")
+  requireNamespace("vroom")
+
+  # BiocManager::install("DESeq2")
+  requireNamespace("DESeq2")
+
+  # BiocManager::install("scater")
+  requireNamespace("scater")
+
+  # BiocManager::install("scran")
+  requireNamespace("scran")
+
+  # BiocManager::install("igraph")
+  requireNamespace("igraph")
+
+  # install.packages("pheatmap")
+  requireNamespace("pheatmap")
+  # install.packages("stringr")
+  requireNamespace("stringr")
+  # install.packages("reshape2")
+  requireNamespace("reshape2")
+  # install.packages("pathlibr")
+  requireNamespace("pathlibr")
+  # install.packages("pbapply")
+  requireNamespace("pbapply")
+
+  # install.packages("Rtsne")
+  requireNamespace("Rtsne")
+  # install.packages("uwot")
+  requireNamespace("uwot")
+
+  # avoid importing `exprs` that leads to clashes
+  requireNamespace("rlang")
+})
+```
+
+### SessionInfo
+
+```{r}
+sessionInfo()
+```
+
+### Paths
+
+```{r}
+BASEPATH <- pathlibr::Path$new(".")
+stopifnot("main.Rmd" %in% names(BASEPATH$dir))
+```
+
+```{r}
+path_to <- (function(.) Sys.glob(BASEPATH$join("../..")$join(.)$show))
+```
+
+### Plotting
+
+```{r}
+ggplot2::theme_set(theme_light(base_size = 15))
+```
+
+```{r}
+kable <- function(.) {
+  kableExtra::kbl(., align = "c") %>%
+    kableExtra::kable_paper("hover", full_width = F)
+}
+```
+
+```{r}
+options(DT.options = list(
+  pageLength = 16,
+  language = list(search = "Filter:")
+))
+```
+
+```{r}
+link <-
+  function(x) {
+    dplyr::case_when(
+      # If x is like GO:003453
+      startsWith(x, "GO:") ~ paste0(
+        "<a target='_blank'",
+        "href='", "http://amigo.geneontology.org/amigo/term/", x, "'",
+        ">", x, "</a>"
+      ),
+      # Otherwise try this
+      TRUE ~ paste0(
+        "<a target='_blank'",
+        "href='", "http://www.informatics.jax.org/marker/summary?nomen=", x, "'",
+        ">", x, "</a>"
+      )
+    )
+  }
+```
+
+### Dataframes
+
+```{r}
+# Use first column as index
+by_col1 <- (function(.) tibble::column_to_rownames(., colnames(.)[1]))
+# Use index as new column `name`
+ind2col <- (function(., name) tibble::rownames_to_column(., var = name))
+```
+
+```{r}
+arrange.like <- (function(X, T) X[rownames(T), , drop = FALSE])
+rows.of <- (function(rows, X) X[rows, , drop = FALSE])
+```
+
+```{r}
+Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 4)
+from_csv <- function(.) {
+  vroom::vroom(., del = "\t", progress = FALSE) %>%
+    by_col1() %>%
+    suppressMessages()
+}
+```
+
+
+### Misc
+
+```{r}
+# Wrap functions that do `library(...)`
+# and force-detach all attached packages
+unattach_packages <- function(f) {
+  # install.packages("crunch")
+  requireNamespace("crunch")
+
+  # wrapper for f
+  function(...) {
+    base::with(
+      crunch::ContextManager(
+        enter = base::search,
+        exit = function() {
+          for (pkg in setdiff(base::search(), enter)) {
+            base::detach(pkg, character.only = TRUE, force = TRUE)
+          }
+        },
+        # this overwrites the variable `enter`, if existent
+        as = "enter"
+      ),
+      {
+        f(...)
+      }
+    )
+  }
+}
+
+# Usage:
+# unattach_packages(function(x, y) { library(goseq); x + y })(1, 2)
+```
+
+
+
+
+## Datasets {.tabset .tabset-fade .tabset-pills}
+
+### Notes
+
+--
+
+### Transcript info
+
+```{r}
+tx <- list(
+  # Mouse
+  mm = merge(
+    (
+      # https://doi.org/doi:10.18129/B9.bioc.org.Mm.eg.db
+      org.Mm.eg.db::org.Mm.egSYMBOL2EG
+    ),
+    (
+      TxDb.Mmusculus.UCSC.mm39.refGene::TxDb.Mmusculus.UCSC.mm39.refGene %>%
+        GenomicFeatures::transcriptLengths() %>%
+        dplyr::group_by(gene_id) %>%
+        dplyr::summarize(tx_len = median(tx_len))
+    ),
+    by = "gene_id"
+  )
+  # data.frame with transcript lengths
+  # (gene_id is unique, symbol is not)
+  #     gene_id        symbol avg_tx_len
+  # 1 100009600         Zglp1       1010
+  # 2 100009609       Vmn2r65       2538
+  # 3 100009614       Gm10024        564
+  # etc.
+) %>% lapply(
+  # Reindex by symbol
+  function(.) {
+    (.) %>%
+      dplyr::group_by(symbol) %>%
+      dplyr::summarize(tx_len = median(tx_len)) %>%
+      by_col1()
+  }
+)
+```
+
+### Gene sets
+
+```{r}
+# C7: immunologic signature gene sets
+# http://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
+# ported to Mus musculus:
+# http://bioinf.wehi.edu.au/MSigDB/index.html
+```
+
+
+### AB -- Mouse ctx & hip (10x) {.tabset .tabset-fade}
+
+#### Load
+
+The whole [mouse wc&h](https://portal.brain-map.org/atlases-and-data/rnaseq/mouse-whole-cortex-and-hippocampus-10x)
+dataset has 1M cells x 50k genes.
+We have [restricted](../../data/AllenBrain/Mouse-WCH-2020)
+it to certain cell-types.
+
+```{r, cache=TRUE}
+sce_abm_ch <-
+  SingleCellExperiment::SingleCellExperiment(
+    assays = list(
+      counts = (
+        path_to("*/AllenBrain/Mouse-WCH*/*fewer_cells/data.*.gz") %>%
+          from_csv() %>%
+          `[`(, sort(colnames(.))) %>%
+          # conversion to matrix takes longest
+          # but is necessary for some operations below
+          as.matrix() 
+      )
+    ),
+    colData = (
+      path_to("*/AllenBrain/Mouse-WCH*/f*cells/meta.*.gz") %>%
+        from_csv() %>%
+        `[`(sort(rownames(.)), )
+    )
+  ) %>%
+  # Order by cell type: sometimes convenient below
+  `[`(, order((.)$cell_type_alias_label))
+```
+
+To reduce the memory footprint,
+only keep recognized genes.
+
+```{r}
+sce_abm_ch <-
+  sce_abm_ch %>%
+  `[`(sort(intersect(rownames(.), rownames(tx$mm))), )
+```
+
+```{r, include=FALSE}
+gc()
+```
+
+Attach a "Is VLMC" flag to samples.
+
+```{r}
+sce_abm_ch$subclass_label <-
+  sce_abm_ch$subclass_label %>%
+  as.factor() %>%
+  relevel(ref = "VLMC")
+
+sce_abm_ch$is_vlmc <-
+  sce_abm_ch$subclass_label %>%
+  magrittr::equals("VLMC")
+```
+
+#### Cell types
+
+```{r}
+exclude_celltypes <- c("Astro", "Endo")
+```
+
+```{r}
+sce_abm_ch$subclass_label %>%
+  data.frame(x = .) %>%
+  ggplot() +
+  aes(x = x, fill = if_else(x %in% exclude_celltypes, "drop", "keep")) +
+  geom_bar() +
+  scale_y_log10() +
+  # hist_theme +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(a = 0, hjust = 0.5),
+    legend.title = element_blank(),
+  )
+```
+
+#### Diagnostics
+
+Attach diagnostics by scater.
+
+```{r, cache=TRUE}
+sce_abm_ch <-
+  sce_abm_ch %>%
+  {
+    scater::addPerCellQC(
+      x = (.),
+      subsets = list(Mito = grep("mt-", rownames(.)))
+    )
+  } %>%
+  # Used for the heatmap
+  scater::logNormCounts() %>%
+  # Not all are used further below:
+  scater::runPCA(name = "PCA", ncomponents = 20) %>%
+  # scater::runTSNE(perplexity = 10, dimred = "PCA") %>%
+  scater::runUMAP()
+```
+
+Samples with fewer than 1000 counts have been 
+[discarded](https://portal.brain-map.org/atlases-and-data/rnaseq/protocols-mouse-cortex-and-hippocampus#gene_expression_quantification).
+
+```{r, message=FALSE}
+sce_abm_ch %>%
+  `[`(, order((.)$cell_type_alias_label)) %>%
+  scater::plotColData(
+    x = "sum",
+    y = "detected",
+    colour_by = "subclass_label"
+  ) +
+  labs(x = "Sum of counts", y = "Genes detected") +
+  scale_color_brewer(palette = "Set1", name = "Cell type")
+```
+
+Each bar corresponds to a cell:
+
+```{r, message=FALSE}
+sce_abm_ch %>%
+  # Subsample for expediency
+  `[`(, union((1:ncol(.))[(.)$is_vlmc], sample(1:ncol(.), 777))) %>%
+  # Plot in the right order for (some) visibility
+  `[`(, order((.)$cell_type_alias_label)) %>%
+  scater::plotHighestExprs(
+    exprs_values = "counts",
+    colour_cells_by = "subclass_label",
+    as_percentage = TRUE
+  ) +
+  scale_color_discrete(name = "Cell type") +
+  labs(x = "Counts, %", y = "Gene")
+```
+
+## Analysis -- Mouse
+
+### Overview
+
+The cells cluster by cell type.
+
+```{r, message=FALSE}
+sce_abm_ch %>%
+  # Plot in the right order
+  `[`(, order((.)$cell_type_alias_label)) %>%
+  {
+    function(which_dimred) {
+      scater::plotReducedDim(
+        dimred = which_dimred,
+        object = (.),
+        colour_by = "subclass_label"
+        # colour_by = "cell_type_alias_label"
+      ) +
+        # theme(legend.position = "none") +
+        scale_color_brewer(palette = "Set1", name = "Cell type")
+
+      # The colors that come with the dataset are all grey:
+      # scale_color_manual(values = c("#3B3F32", "#697255", "#535944"))
+    }
+  } %>%
+  {
+    gridExtra::grid.arrange((.)("PCA"), (.)("UMAP"), nrow = 2)
+  }
+```
+
+```{r, include=FALSE}
+gc()
+```
+
+### VLMC vs Other
+
+Before focusing on the VLMC cells,
+we check for differential genes of VLMC vs the rest.
+We take a subsample of cells for expedience.
+
+```{r, cache=TRUE, message=FALSE}
+# This does not modify the original:
+# sce_abm_ch %>% list(sce = .) %>% within({sce$dummy <- 2})
+
+de_results.ctrl_vs_vlmc <-
+  sce_abm_ch %>%
+  list(sce = .) %>%
+  within({
+    # SUBSAMPLE:
+    # Take VLMC and sample some from the rest
+
+    jj <- 1:ncol(sce)
+
+    set.seed(15)
+    jj_vlmc <- jj[sce$is_vlmc]
+    jj_ctrl <- jj[!sce$is_vlmc] %>% sample(3 * length(jj_vlmc))
+
+    sce <- sce[, union(jj_vlmc, jj_ctrl)]
+
+    # Intermediate report (facultative)
+    sce$subclass_label %>%
+      table() %>%
+      print()
+  }) %>%
+  with({
+    sce %>%
+      # Package into DESeq object; DE between VLMC and Other
+      DESeq2::DESeqDataSet(design = ~is_vlmc) %>%
+      DESeq2::estimateSizeFactors() %>%
+      DESeq2::DESeq(quiet = TRUE, fitType = "local") %>%
+      DESeq2::results()
+  }) %>%
+  as.data.frame() %>%
+  slice_min(pvalue, n = 500)
+```
+
+```{r}
+de_results.ctrl_vs_vlmc %>%
+  select(mean = baseMean, l2fc = log2FoldChange, p = pvalue, padj) %>%
+  ind2col("symbol") %>%
+  mutate(symbol = link(symbol)) %>%
+  DT::datatable(escape = FALSE) %>%
+  DT::formatSignif(c("mean", "l2fc", "p", "padj"), digits = 3)
+```
+
+Establish a color scheme for the following.
+
+```{r}
+annotation_colors <-
+  sce_abm_ch %>% {
+    # This defines annotation colors
+    list(
+      # Create colors for the given cell types
+      subclass_label = (
+        (.)$subclass_label %>%
+          unique() %>%
+          sort(decreasing = FALSE) %>%
+          list(
+            x = .,
+            c = RColorBrewer::brewer.pal(n = length(.), name = "Set1")
+          )
+      ),
+
+      # Create colors for the given cell sub types
+      cell_type_alias_label = (
+        (.)$cell_type_alias_label %>%
+          unique() %>%
+          list(
+            x = .,
+            c = RColorBrewer::brewer.pal(n = length(.), name = "Spectral")
+          )
+      ),
+
+      # Use the given colors for the brain anatomical region
+      region_label = data.frame(
+        x = (.)$region_label,
+        c = (.)$region_color
+      ) %>% unique()
+    ) %>%
+      lapply(function(.) {
+        (.) %>%
+          as.data.frame() %>%
+          pull(c, x) %>%
+          unlist()
+      })
+  }
+```
+
+Heatmap of those DE genes for all cells.
+Clustering of samples 
+using topmost DE genes
+does collect 
+the VLMC cells together:
+
+```{r}
+de_results.ctrl_vs_vlmc %>%
+  slice_min(pvalue, n = 55, with_ties = TRUE) %>%
+  rownames() %>%
+  rows.of(sce_abm_ch) %>%
+  scater::logNormCounts() %>%
+  # Order columns by cell type
+  `[`(, order((.)$cell_type_alias_label)) %>%
+  {
+    pheatmap::pheatmap(
+      mat = (
+        (.)@assays@data$logcounts
+      ),
+      annotation_col = (
+        (.)@colData %>%
+          as.data.frame() %>%
+          dplyr::select(subclass_label, cell_type_alias_label)
+      ),
+      cluster_cols = TRUE, # (!)
+      show_colnames = FALSE,
+      fontsize_row = 6,
+      treeheight_row = 0,
+      treeheight_col = 0,
+      color = grDevices::colorRampPalette(c("white", "blue"))(10),
+      annotation_colors = annotation_colors
+    )
+  }
+```
+
+Let's look at the genes that
+are identified as markers in
+the "betsholtzlab dataset".
+Some astrocytes invade the VLMC cluster.
+
+```{r}
+sce_abm_ch %>%
+  `[`(
+    intersect(
+      rownames(.),
+      rownames(from_csv(path_to("*/Betsholtz-2018/*/mrkr.*")))
+    ),
+  ) %>%
+  {
+    pheatmap::pheatmap(
+      mat = (
+        (.)@assays@data$logcounts
+      ),
+      annotation_col = (
+        (.)@colData %>%
+          as.data.frame() %>%
+          dplyr::select(subclass_label, cell_type_alias_label)
+      ),
+      cluster_cols = TRUE, # (!)
+      show_colnames = FALSE,
+      fontsize_row = 6,
+      treeheight_row = 0,
+      treeheight_col = 0,
+      color = grDevices::colorRampPalette(c("white", "blue"))(10),
+      annotation_colors = annotation_colors
+    )
+  }
+```
+
+### Filter for VLMC
+
+```{r}
+sce_abm_ch.vlmc <-
+  sce_abm_ch %>%
+  `[`(, (.)$is_vlmc)
+```
+
+### Cluster within VLMC
+
+UMAP roughly reflects 
+the cell subtypes provided with the data.
+
+```{r}
+sce_abm_ch.vlmc %>%
+  scater::plotReducedDim(dimred = "UMAP", colour_by = "cell_type_alias_label")
+```
+
+We wish to capture exactly two clusters
+for DE analysis.
+The subsequent analysis
+assumes this.
+
+```{r, cache=TRUE}
+sce_abm_ch.vlmc$my_cluster_label <-
+  sce_abm_ch.vlmc %>%
+  list(sce = ., labels = (.)$subclass_label) %>%
+  with({
+    # Cluster membership (integers)
+    kk <- sce %>%
+      # k is hand-picked to yield two clusters
+      scran::buildSNNGraph(k = 25, use.dimred = "UMAP", type = "rank") %>% {
+        set.seed(43)
+
+        (.) %>%
+          # connected components
+          # igraph::components() %>%
+
+          # propagating labels by iterative majority voting
+          igraph::cluster_label_prop(.) %>%
+          igraph::membership()
+      }
+
+    # Letters instead of integers
+    LETTERS[kk] %>%
+      # make labels like A_VLMC, B_VLMC
+      paste(labels, sep = "_") %>%
+      as.factor() %>%
+      relevel(ref = "A_VLMC")
+  })
+
+# Expect two clusters; otherwise visualize
+sce_abm_ch.vlmc %>% {
+  print(levels((.)$my_cluster_label))
+  if (!length(levels((.)$my_cluster_label))) {
+    (.) %>%
+      scater::plotReducedDim(dimred = "UMAP", colour_by = "my_cluster_label")
+  }
+}
+```
+
+Henceforth, use consistent coloring.
+
+```{r}
+my_cluster_colors <-
+  sce_abm_ch.vlmc %>%
+  `$`("my_cluster_label") %>%
+  levels() %>%
+  list(x = ., c = c("DarkRed", "DarkOrange")) %>%
+  as.data.frame()
+
+annotation_colors$my_cluster_label <-
+  my_cluster_colors %>%
+  pull(c, x)
+```
+
+See the proposed clustering.
+
+```{r, message=FALSE}
+sce_abm_ch.vlmc %>%
+  scater::plotReducedDim(
+    dimred = "UMAP",
+    colour_by = "my_cluster_label"
+  ) +
+  scale_color_manual(
+    values = my_cluster_colors %>% pull(c, x),
+    name = "Cluster ID"
+  )
+```
+
+```{r}
+stopifnot(assertthat::are_equal(levels(sce_abm_ch.vlmc$my_cluster_label), c("A_VLMC", "B_VLMC")))
+```
+
+
+### DE genes
+
+Identify DE genes between the two clusters
+within VLMC.
+
+```{r, cache=TRUE}
+de_results.within_vlmc <-
+  sce_abm_ch.vlmc %>%
+  DESeq2::DESeqDataSet(design = ~my_cluster_label) %>%
+  DESeq2::estimateSizeFactors() %>%
+  DESeq2::DESeq(quiet = TRUE, fitType = "local", parallel = TRUE) %>%
+  DESeq2::results() %>%
+  as.data.frame() %>%
+  slice_min(pvalue, n = 500)
+```
+
+```{r, include=FALSE}
+gc()
+```
+
+See as table.
+
+```{r}
+de_results.within_vlmc %>%
+  select(mean = baseMean, l2fc = log2FoldChange, p = pvalue, padj = padj) %>%
+  ind2col("symbol") %>%
+  mutate(symbol = link(symbol)) %>%
+  DT::datatable(escape = FALSE) %>%
+  DT::formatSignif(c("mean", "l2fc", "p", "padj"), digits = 3)
+```
+
+Heatmap of a few top DE genes,
+annotated by 
+the inferred cluster
+and 
+the available cell type info.
+
+```{r}
+de_results.within_vlmc %>%
+  slice_min(pvalue, n = 77) %>%
+  rownames() %>%
+  rows.of(sce_abm_ch.vlmc) %>%
+  `[`(, order((.)$cell_type_alias_label)) %>%
+  {
+    pheatmap::pheatmap(
+      mat = (
+        (.)@assays@data$logcounts
+      ),
+      annotation_col = (
+        (.)@colData %>%
+          as.data.frame() %>%
+          # of possible interest also: region_label
+          dplyr::select(region_label, cell_type_alias_label, my_cluster_label)
+      ),
+      cluster_cols = FALSE,
+      cluster_rows = FALSE,
+      show_colnames = FALSE,
+      fontsize_row = 6,
+      treeheight_row = 0,
+      treeheight_col = 0,
+      color = grDevices::colorRampPalette(c("white", "blue"))(10),
+      annotation_colors = annotation_colors
+    )
+  }
+```
+
+In context:
+show all cells
+along the within-VLMC-DE genes.
+
+```{r}
+sce_abm_ch$my_cluster_label <-
+  sce_abm_ch.vlmc@colData %>%
+  as.data.frame() %>%
+  select(my_cluster_label) %>%
+  `[`(colnames(sce_abm_ch), )
+
+de_results.within_vlmc %>%
+  slice_min(pvalue, n = 77) %>%
+  rownames() %>%
+  rows.of(sce_abm_ch) %>%
+  `[`(, order((.)$cell_type_alias_label)) %>%
+  {
+    pheatmap::pheatmap(
+      mat = (
+        (.)@assays@data$logcounts
+      ),
+      annotation_col = (
+        (.)@colData %>%
+          as.data.frame() %>%
+          # of possible interest also: region_label
+          dplyr::select(region_label, cell_type_alias_label, my_cluster_label)
+      ),
+      cluster_cols = FALSE,
+      cluster_rows = FALSE,
+      show_colnames = FALSE,
+      fontsize_row = 6,
+      treeheight_row = 0,
+      treeheight_col = 0,
+      color = grDevices::colorRampPalette(c("white", "blue"))(10),
+      annotation_colors = annotation_colors
+    )
+  }
+```
+
+### Pathway / geneset enrichment: preliminaries
+
+Formatting of the GO-terms DE table:
+
+```{r}
+show_go <- function(tbl) {
+  tbl %>%
+    dplyr::select("category", "overrep.p", "#DE", "#cat", "term", "GO") %>%
+    DT::datatable(escape = FALSE) %>%
+    DT::formatSignif("overrep.p", digits = 3)
+}
+```
+
+We take some of the top DE (up or down) genes,
+which requires to set a cut-off.
+This impacts on the size
+of GO categories that will be found below.
+
+```{r, cache=TRUE}
+# Number of top DE genes to keep
+# for pathway enrichment analysis
+n <- 77
+
+# Note: `lfc` contains NA where no DE
+lfc <-
+  de_results.within_vlmc %>%
+  # Select top DE genes
+  slice_min(padj, n = n, with_ties = TRUE) %>%
+  # Focus on this column
+  select(lfc = log2FoldChange) %>%
+  # Rownames as `symbol` column
+  ind2col("symbol") %>%
+  # Attach all the other symbols
+  add_row(symbol = rownames(sce_abm_ch)) %>%
+  # Keeps only the first one
+  distinct(symbol, .keep_all = TRUE) %>%
+  # As named vector (for goseq)
+  pull(lfc, symbol)
+
+stopifnot(assertthat::are_equal(length(lfc), nrow(sce_abm_ch)))
+stopifnot(assertthat::are_equal(sum(na.omit(lfc < 0)) + sum(na.omit(0 < lfc)), n))
+```
+
+### GO enrichment with [goseq::goseq](https://www.bioconductor.org/packages/release/bioc/vignettes/goseq/inst/doc/goseq.pdf) {.tabset .tabset-fade}
+
+#### Compute
+
+To find enriched GO terms
+with [goseq]()
+we need to provide it with a list of genes
+as a binary vector
+(the fold-change is ignored).
+
+```{r, error=FALSE, warning=FALSE, message=FALSE, results="markup", cache=TRUE}
+enriched_terms <-
+  list(
+    up = (lfc > 0),
+    dn = (lfc < 0)
+  ) %>% lapply(
+    unattach_packages(function(.) {
+      (.) %>%
+        # goseq-friendly:
+        tidyr::replace_na(replace = 0) %>%
+        # goseq::nullp takes a binary vector (DE=1, else=0) named by gene IDs
+        goseq::nullp(
+          id = "geneSymbol",
+          genome = "mm39",
+          bias.data = (
+            # Gene -to- transcript length
+            # Make a vector of same shape as the named indicator vector
+            # Note: this could return NULL if the column does not exist,
+            #       so goseq will attempt to download the info from UCSC
+            tx$mm[names(.), "tx_len"]
+          ),
+          plot.fit = FALSE
+        ) %>%
+        # forward the resulting "Probability Weighting Function"
+        goseq::goseq(id = "geneSymbol", genome = "mm39") %>%
+        # need to be explicit because goseq does `library(...)`
+        dplyr::slice_min(over_represented_pvalue, n = 500) %>%
+        dplyr::select(-under_represented_pvalue) %>%
+        #
+        dplyr::mutate(category = link(category)) %>%
+        dplyr::rename(
+          # new name = old name
+          "overrep.p" = over_represented_pvalue,
+          "#cat" = numInCat,
+          "#DE" = numDEInCat,
+          "GO" = ontology
+        )
+    })
+  )
+```
+
+#### Up
+
+```{r}
+enriched_terms$up %>% show_go()
+```
+
+#### Down
+
+```{r}
+enriched_terms$dn %>% show_go()
+```
+
+
+### GO enrichment with [limma::goana](https://www.bioconductor.org/packages/devel/workflows/vignettes/RnaSeqGeneEdgeRQL/inst/doc/edgeRQL.html#pathway-analysis) {.tabset .tabset-fade}
+
+#### Compute
+
+```{r, cache=TRUE}
+enriched_terms <-
+  list(
+    up = (lfc > 0),
+    dn = (lfc < 0)
+  ) %>% lapply(
+    function(.) {
+      data.frame(take = .) %>%
+        filter(take == TRUE) %>%
+        ind2col("symbol") %>%
+        # Get the Entrez IDs of our genes
+        merge(
+          org.Mm.eg.db::org.Mm.egSYMBOL2EG %>% as.data.frame(),
+          by = "symbol"
+        ) %>%
+        pull(gene_id) %>%
+        # Enrichment analysis
+        limma::goana(species = "Mm") %>%
+        # Select topmost
+        dplyr::slice_min(P.DE, n = 500) %>%
+        # Format for display
+        ind2col("category") %>%
+        dplyr::mutate(category = link(category)) %>%
+        dplyr::rename(
+          # new name = old name
+          "overrep.p" = P.DE,
+          "#DE" = DE,
+          "#cat" = N,
+          "GO" = Ont,
+          "term" = Term
+        )
+    }
+  )
+```
+
+#### Up
+
+```{r}
+enriched_terms$up %>% show_go()
+```
+
+#### Down
+
+```{r}
+enriched_terms$dn %>% show_go()
+```
+
+
+### KEGG enrichment with [limma::kegga](https://www.bioconductor.org/packages/devel/workflows/vignettes/RnaSeqGeneEdgeRQL/inst/doc/edgeRQL.html#pathway-analysis) {.tabset .tabset-fade}
+
+#### Compute
+
+```{r, cache=TRUE}
+enriched_terms <-
+  list(
+    up = (lfc > 0),
+    dn = (lfc < 0)
+  ) %>% lapply(
+    function(.) {
+      data.frame(take = .) %>%
+        filter(take == TRUE) %>%
+        ind2col("symbol") %>%
+        # Get the Entrez IDs of our genes
+        merge(
+          org.Mm.eg.db::org.Mm.egSYMBOL2EG %>% as.data.frame(),
+          by = "symbol"
+        ) %>%
+        pull(gene_id) %>%
+        # Enrichment analysis
+        limma::kegga(species = "Mm") %>%
+        # https://www.bioconductor.org/packages/devel/workflows/vignettes/RnaSeqGeneEdgeRQL/inst/doc/edgeRQL.html#pathway-analysis
+        limma::topKEGG(n = 30, truncate = 34)
+    }
+  )
+```
+
+#### Up
+
+```{r}
+enriched_terms$up
+```
+
+#### Down
+
+```{r}
+enriched_terms$dn
+```
+
+
+```{r include=FALSE}
+knitr::knit_exit()
+```
+
+
+
+
+
+
+## Leads
+
+- MSigDB [info](http://bioinf.wehi.edu.au/software/MSigDB/), [data](http://bioinf.wehi.edu.au/MSigDB/index.html), [camera](https://www.bioconductor.org/packages/devel/workflows/vignettes/RnaSeqGeneEdgeRQL/inst/doc/edgeRQL.html#camera-gene-set-enrichment-analysis)
+
+
+
+
+## Notes
+
+"echo = FALSE": prevent printing of the R code that generated the plot.
+https://rmarkdown.rstudio.com/lesson-3.html
