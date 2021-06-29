@@ -2253,8 +2253,8 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
               take_rows(pos, E$b) %>% magrittr::set_colnames(c("xend", "yend"))
             ) %>%
             mutate(
-              x = x + (xend - x) * 0.03, xend = xend - (xend - x) * 0.1,
-              y = y + (yend - y) * 0.03, yend = yend - (yend - y) * 0.1
+              x = x + (xend - x) * 0.02, xend = xend - (xend - x) * 0.03,
+              y = y + (yend - y) * 0.02, yend = yend - (yend - y) * 0.03
             )
         })
     }) %>%
@@ -2297,7 +2297,7 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
               color = if_else(igraph::E(tf$graph)$sign > 0, "red", "blue"),
               alpha = slide$alpha$tf,
               size = 0.2,
-              curvature = 0.1,
+              curvature = 0.05,
               linetype = "solid"
             ) +
             # Ligand-receptor curves
@@ -2309,7 +2309,7 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
               color = if_else(igraph::E(lr$graph)$sign > 0, "red", "blue"),
               alpha = slide$alpha$lr,
               size = 0.2,
-              curvature = 0.1,
+              curvature = 0.05,
               linetype = "solid"
             ) +
             # PPInteraction curves
@@ -2321,7 +2321,7 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
               color = if_else(igraph::E(ia$graph)$sign > 0, "red", "blue"),
               alpha = slide$alpha$ia,
               size = 0.2,
-              curvature = 0.1,
+              curvature = 0.05,
               linetype = "solid"
             ) +
             # Labels
