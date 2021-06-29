@@ -76,7 +76,7 @@ figures()
 ```
 
 
-```{r, out.extra='id="myfig" class="scrollable"', dpi=36, out.width='20%', results='hide'}
+```{r, out.extra='id="myfig" class="scrollable"', out.width='20%', results='hide', dpi=36}
 figures()
 ```
 

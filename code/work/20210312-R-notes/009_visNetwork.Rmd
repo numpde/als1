@@ -1,0 +1,85 @@
+---
+title: "visNetwork"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output: 
+  html_document
+editor_options:
+ chunk_output_type: console
+---
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(dplyr)
+  requireNamespace("visNetwork")
+})
+```
+
+```{r}
+BASEPATH <- pathlibr::Path$new(".")
+path_to <- (function(.) Sys.glob(BASEPATH$join("../..")$join(.)$show))
+
+from_tsv <- function(filename, sep = "\t") {
+  filename %>% vroom::vroom(del = sep) %>% suppressMessages()
+}
+
+```
+
+```{r}
+nodes <- jsonlite::fromJSON("https://raw.githubusercontent.com/datastorm-open/datastorm-open.github.io/master/visNetwork/data/nodes_miserables.json")
+
+edges <- jsonlite::fromJSON("https://raw.githubusercontent.com/datastorm-open/datastorm-open.github.io/master/visNetwork/data/edges_miserables.json")
+
+visNetwork::visNetwork(nodes, edges, height = "1700px", width = "100%") %>%
+  visNetwork::visOptions(
+    selectedBy = "group",
+    highlightNearest = TRUE,
+    nodesIdSelection = TRUE
+  )
+```
+
+```{r}
+neuro <- c(c("Fos", "Fosb", "Junb"), c("Ascc1", "Chuk", "Fos", "Jun", "Mapk14", "Mapk8", "mt-Co1", "mt-Co2", "Mtor", "Nfkbia", "Nos2", "Rela", "Tlr4"))
+```
+
+```{r}
+omnipath <-
+  path_to("*/*/*/omnipath_in.csv.gz") %>%
+  from_tsv() %>%
+  select(
+    source, a = source_genesymbol, target, b = target_genesymbol, organism,
+    is_inhibition, is_stimulation
+  )
+```
+
+```{r}
+omnipath %>%
+  mutate(sign = is_stimulation - is_inhibition) %>%
+  filter((a %in% neuro) & (b %in% neuro)) %>%
+  select(a, b, sign) %>%
+  group_by(a, b) %>% summarize(sign = sum(sign), .groups = "keep") %>%
+  filter(sign != 0) %>%
+  igraph::graph_from_data_frame() %>%
+  {
+    igraph::V(.)$i <- ((1:igraph::vcount(.)) - 1)
+    (.)
+  } %>%
+  {
+    n2i <- igraph::as_data_frame((.), "vertices") %>% 
+      pull(i, name)
+    
+    nodes <- igraph::as_data_frame((.), "vertices") %>% 
+      select(id = i, label = name)
+    
+    edges <- igraph::as_data_frame((.), "edges") %>% 
+      mutate(from = n2i[from], to = n2i[to], arrows = "to")
+    
+    #edges %>% select(from, to)
+    visNetwork::visNetwork(nodes = nodes, edges = edges)
+  }
+
+  
+  #
+```
+
