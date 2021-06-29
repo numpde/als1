@@ -2176,22 +2176,39 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
 
   stopifnot(all(c("a", "b", "w") %in% colnames(coex_df)))
 
+  # Co-expression graph
   ex_graph <-
     coex_df %>%
+    
     group_by(w > 0) %>%
     mutate(color = ((1 + w / max(abs(w))) / 2)) %>%
     slice_max(abs(w), n = n) %>%
     ungroup() %>%
-    mutate(color = colorRamp(c("blue", "white", "red"))(color) %>% RGB(alpha = 0.2)) %>%
+    
+    mutate(
+      color = colorRamp(c("blue", "white", "red"))(color) %>% RGB(alpha = 0.2)
+    ) %>%
+    
     select(a, b, w, color) %>%
     igraph::graph_from_data_frame(
       directed = FALSE,
       vertices = (
         de_table %>%
           filter((symbol %in% coex_df$a) | (symbol %in% coex_df$b)) %>%
-          select(symbol, color)
+          select(name = symbol, color, lfc)
       )
     )
+  
+  igraph::E(ex_graph)$consistent <- 
+    list(
+      edges = ex_graph %>% igraph::as_data_frame("edges"),
+      v_lfc = ex_graph %>% igraph::as_data_frame("vertices") %>% pull(lfc, name)
+    ) %>%
+      with({
+        edges %>%
+          mutate(consistent = (sign(v_lfc[from] * v_lfc[to]) == sign(w))) %>%
+          pull(consistent)
+      })
 
   # Graphs based on OmniPath
   graphs <- list(
@@ -2286,7 +2303,7 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
               color = igraph::E(ex$graph)$color,
               alpha = slide$alpha$ex,
               size = 0.1,
-              linetype = "solid"
+              linetype = if_else(igraph::E(ex$graph)$consistent, "solid", "dashed")
             ) +
             # TF-target curves
             geom_curve(
@@ -2352,9 +2369,9 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
   #     layout = graph_layout
   #   )
 }
-```
-
-```{r, dpi=36, out.extra='class="scrollable"', out.width='30%', results='hide'}
+# ```
+# 
+# ```{r, dpi=36, out.extra='class="scrollable"', out.width='30%', results='hide'}
 sce_dummy %>%
   `[`(, (.)$group == "healthy") %>%
   take_rows(get_goi_genes()) %>%
