@@ -7,7 +7,7 @@ output:
     toc: true
     toc_depth: 2
     self_contained: false
-    keep_md: true
+    keep_md: false
     #code_folding: show
 editor_options:
   chunk_output_type: console
@@ -3355,7 +3355,7 @@ datasets$ab %>%
 
 ##### 374_VLMC
 
-```{r, dpi=96, out.extra='class="zoomable scrollable"', results='hide'}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$ab %>%
   take_rows(get_goi_genes()) %>%
   `[`(, .$celltype == "374_VLMC") %>%
@@ -3365,7 +3365,7 @@ datasets$ab %>%
 
 ##### 375_VLMC
 
-```{r, dpi=96, out.extra='class="zoomable scrollable"', results='hide'}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$ab %>%
   take_rows(get_goi_genes()) %>%
   `[`(, .$celltype == "375_VLMC") %>%
@@ -3375,7 +3375,7 @@ datasets$ab %>%
 
 ##### 376_VLMC
 
-```{r, dpi=96, out.extra='class="zoomable scrollable"', results='hide'}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$ab %>%
   take_rows(get_goi_genes()) %>%
   `[`(, .$celltype == "376_VLMC") %>%
@@ -3388,7 +3388,7 @@ datasets$ab %>%
 
 ##### All
 
-```{r, out.extra='class="zoomable scrollable"', results='hide', dpi=144}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$bh %>%
   take_rows(get_goi_genes()) %>%
   coex() %>%
@@ -3397,7 +3397,7 @@ datasets$bh %>%
 
 ##### FB1
 
-```{r, out.extra='class="zoomable scrollable"', results='hide', dpi=96}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$bh %>%
   take_rows(get_goi_genes()) %>%
   `[`(, .$celltype == "FB1") %>%
@@ -3407,7 +3407,7 @@ datasets$bh %>%
 
 ##### FB2
 
-```{r, out.extra='class="zoomable scrollable"', results='hide', dpi=96}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$bh %>%
   take_rows(get_goi_genes()) %>%
   `[`(, .$celltype == "FB2") %>%
@@ -3420,7 +3420,7 @@ datasets$bh %>%
 
 ##### All
 
-```{r, out.extra='class="zoomable scrollable"', results='hide', dpi=144}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$cb %>%
   take_rows(get_goi_genes()) %>%
   coex() %>%
@@ -3429,7 +3429,7 @@ datasets$cb %>%
 
 ##### Ctrl
 
-```{r, out.extra='class="zoomable scrollable"', results='hide', dpi=96}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$cb %>%
   take_rows(get_goi_genes()) %>%
   `[`(, .$Group == "Ctrl") %>%
@@ -3439,7 +3439,7 @@ datasets$cb %>%
 
 ##### EAE
 
-```{r, out.extra='class="zoomable scrollable"', results='hide', dpi=96}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$cb %>%
   take_rows(get_goi_genes()) %>%
   `[`(, .$Group == "EAE") %>%
@@ -3452,7 +3452,7 @@ datasets$cb %>%
 
 ##### All
 
-```{r, out.extra='class="zoomable scrollable"', results='hide', dpi=144}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$dm %>%
   take_rows(get_goi_genes()) %>%
   coex() %>%
@@ -3461,7 +3461,7 @@ datasets$dm %>%
 
 ##### Healthy1+2
 
-```{r, out.extra='class="zoomable scrollable"', results='hide', dpi=96}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$dm %>%
   take_rows(get_goi_genes()) %>%
   `[`(, .$subgroup %in% c("healthy1", "healthy2")) %>%
@@ -3471,7 +3471,7 @@ datasets$dm %>%
 
 ##### Healthy3
 
-```{r, out.extra='class="zoomable scrollable"', results='hide', dpi=96}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$dm %>%
   take_rows(get_goi_genes()) %>%
   `[`(, .$subgroup == "healthy3") %>%
@@ -3481,7 +3481,7 @@ datasets$dm %>%
 
 ##### EAE1
 
-```{r, out.extra='class="zoomable scrollable"', results='hide', dpi=144}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$dm %>%
   take_rows(get_goi_genes()) %>%
   `[`(, .$subgroup == "EAE1") %>%
@@ -3491,7 +3491,7 @@ datasets$dm %>%
 
 ##### EAE2
 
-```{r, out.extra='class="zoomable scrollable"', results='hide', dpi=144}
+```{r, dpi=144, out.extra='class="zoomable scrollable"', results='hide'}
 datasets$dm %>%
   take_rows(get_goi_genes()) %>%
   `[`(, .$subgroup == "EAE2") %>%
