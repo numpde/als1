@@ -3374,6 +3374,11 @@ TF-target,
 ligand-receptor,
 protein-protein interactions
 from OmniPath.
+The color is from co-expression (yellow = neutral).
+The line is dashed if 
+the observed co-expression contradicts
+the expected effect,
+e.g. inhibition is expected but positive co-expression is observed.
 
 Click on the figure to change the view;
 shift-click to enlarge.
