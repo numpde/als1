@@ -2175,19 +2175,25 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
   # de_table %>% pull(color, symbol)
 
   stopifnot(all(c("a", "b", "w") %in% colnames(coex_df)))
-
+  
+  # Symbol -> LFC map
+  node_lfc <- de_table %>% pull(lfc, symbol)
+  
+  # Attach edge color
+  coex_df %<>%
+    group_by(w > 0) %>%
+    mutate(color = ((1 + w / max(abs(w))) / 2)) %>%
+    ungroup() %>%
+    mutate(color = colorRamp(c("blue", "yellow", "red"))(color) %>% RGB(alpha = 0.2))
+    
   # Co-expression graph
   ex_graph <-
     coex_df %>%
     
+    # Take top `n` co-expression edges at both extremes
     group_by(w > 0) %>%
-    mutate(color = ((1 + w / max(abs(w))) / 2)) %>%
     slice_max(abs(w), n = n) %>%
     ungroup() %>%
-    
-    mutate(
-      color = colorRamp(c("blue", "white", "red"))(color) %>% RGB(alpha = 0.2)
-    ) %>%
     
     select(a, b, w, color) %>%
     igraph::graph_from_data_frame(
@@ -2195,20 +2201,9 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
       vertices = (
         de_table %>%
           filter((symbol %in% coex_df$a) | (symbol %in% coex_df$b)) %>%
-          select(name = symbol, color, lfc)
+          select(name = symbol, color)
       )
     )
-  
-  igraph::E(ex_graph)$consistent <- 
-    list(
-      edges = ex_graph %>% igraph::as_data_frame("edges"),
-      v_lfc = ex_graph %>% igraph::as_data_frame("vertices") %>% pull(lfc, name)
-    ) %>%
-      with({
-        edges %>%
-          mutate(consistent = (sign(v_lfc[from] * v_lfc[to]) == sign(w))) %>%
-          pull(consistent)
-      })
 
   # Graphs based on OmniPath
   graphs <- list(
@@ -2220,22 +2215,37 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
   ) %>%
     lapply(function(df) {
       df %>%
-        mutate(sign = is_stimulation - is_inhibition) %>%
-        select(a = source_genesymbol, b = target_genesymbol, sign) %>%
+        mutate(W = is_stimulation - is_inhibition) %>%
+        select(a = source_genesymbol, b = target_genesymbol, W) %>%
         filter(a %in% igraph::V(ex_graph)$name) %>%
         filter(b %in% igraph::V(ex_graph)$name) %>%
-        # group_by(a, b) %>% summarize(sign = sum(sign)) %>%
-        filter(sign != 0) %>%
+        group_by(a, b) %>% summarize(W = sum(W), .groups = "keep") %>%
+        filter(W != 0) %>%
+        
+        # Attach co-expression `w` and edge color
+        merge(coex_df %>% select(a, b, w, color), by = c("a", "b")) %>%
+        
+        # Ensure correct order
+        select(a, b, w, W, color) %>%
         igraph::graph_from_data_frame(directed = TRUE)
     }) %>%
     within({
       ex <- ex_graph
+      
+      # `W` is positive iff both LFC are of the same sign
+      edges <- ex %>% igraph::as_data_frame("edges")
+      igraph::E(ex)$W <- sign(node_lfc[edges$from] * node_lfc[edges$to])
+      rm(edges)
+    }) %>% 
+    lapply(function(g) {
+      igraph::E(g)$coherent <- (sign(igraph::E(g)$w) == sign(igraph::E(g)$W))
+      return(g)
     })
 
   rm(ex_graph)
 
   # for layouting
-  set.seed(43)
+  set.seed(41)
 
   graph_layout <-
     (
@@ -2245,7 +2255,7 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
         + igraph::as.undirected(graphs$ia)
     ) %>%
     # igraph::layout_with_kk(dim = 2, kkconst = igraph::vcount(.)) %>%
-    igraph::layout_with_dh(maxiter = 33) %>%
+    igraph::layout_with_dh(maxiter = 22) %>%
     # igraph::layout_with_lgl() %>%
     # igraph::layout_with_fr(start.temp = 1e-1) %>%
     as.data.frame() %>%
@@ -2278,15 +2288,15 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
     with({
       list(
         slide1 = list(
-          alpha = list(ex = 2e-2, tf = 0.20, lr = 3e-2, ia = 3e-2),
+          alpha = list(ex = 2e-2, tf = 0.80, lr = 3e-2, ia = 3e-2),
           title = "TF -> target"
         )
         , slide2 = list(
-          alpha = list(ex = 2e-2, tf = 3e-2, lr = 0.20, ia = 3e-2),
+          alpha = list(ex = 2e-2, tf = 3e-2, lr = 0.80, ia = 3e-2),
           title = "Ligand -> receptor"
         )
         , slide3 = list(
-          alpha = list(ex = 2e-2, tf = 3e-2, lr = 3e-2, ia = 0.20),
+          alpha = list(ex = 2e-2, tf = 3e-2, lr = 3e-2, ia = 0.80),
           title = "More protein-protein interaction"
         )
         , slide4 = list(
@@ -2303,43 +2313,52 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
               color = igraph::E(ex$graph)$color,
               alpha = slide$alpha$ex,
               size = 0.1,
-              linetype = if_else(igraph::E(ex$graph)$consistent, "solid", "dashed")
+              linetype = if_else(igraph::E(ex$graph)$coherent, "solid", "dashed")
             ) +
             # TF-target curves
             geom_curve(
               data = tf$segment,
               lineend = "butt", # linejoin = "mitre",
               aes(x = x, y = y, xend = xend, yend = yend),
-              arrow = arrow(length = unit(0.005, "npc")),
-              color = if_else(igraph::E(tf$graph)$sign > 0, "red", "blue"),
+              arrow = arrow(
+                length = unit(0.007, "npc"), 
+                angle = if_else(igraph::E(tf$graph)$W > 0, 10, 90)
+              ),
+              color = igraph::E(tf$graph)$color,
               alpha = slide$alpha$tf,
               size = 0.2,
               curvature = 0.05,
-              linetype = "solid"
+              linetype = if_else(igraph::E(tf$graph)$coherent, "solid", "dashed")
             ) +
             # Ligand-receptor curves
             geom_curve(
               data = lr$segment,
               lineend = "butt", # linejoin = "mitre",
               aes(x = x, y = y, xend = xend, yend = yend),
-              arrow = arrow(length = unit(0.005, "npc")),
-              color = if_else(igraph::E(lr$graph)$sign > 0, "red", "blue"),
+              arrow = arrow(
+                length = unit(0.007, "npc"), 
+                angle = if_else(igraph::E(lr$graph)$W > 0, 10, 90)
+              ),
+              color = igraph::E(lr$graph)$color,
               alpha = slide$alpha$lr,
               size = 0.2,
               curvature = 0.05,
-              linetype = "solid"
+              linetype = if_else(igraph::E(lr$graph)$coherent, "solid", "dashed")
             ) +
             # PPInteraction curves
             geom_curve(
               data = ia$segment,
               lineend = "butt", # linejoin = "mitre",
               aes(x = x, y = y, xend = xend, yend = yend),
-              arrow = arrow(length = unit(0.005, "npc")),
-              color = if_else(igraph::E(ia$graph)$sign > 0, "red", "blue"),
+              arrow = arrow(
+                length = unit(0.007, "npc"), 
+                angle = if_else(igraph::E(ia$graph)$W > 0, 10, 90)
+              ),
+              color = igraph::E(ia$graph)$color,
               alpha = slide$alpha$ia,
               size = 0.2,
               curvature = 0.05,
-              linetype = "solid"
+              linetype = if_else(igraph::E(ia$graph)$coherent, "solid", "dashed")
             ) +
             # Labels
             geom_text(
