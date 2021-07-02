@@ -583,7 +583,7 @@ take_rows <- function(df, rows = NULL) {
 
 ```{r}
 # For reading wide tables
-Sys.setenv("VROOM_CONNECTION_SIZE" = 2 ** 18)
+Sys.setenv("VROOM_CONNECTION_SIZE" = 2**18)
 
 from_tsv <- function(filename, sep = "\t") {
   filename %>%
@@ -711,7 +711,8 @@ symbol2geneid <- function(genes) {
       by = "symbol",
       sort = FALSE # !
     ) %>%
-    pull(gene_id, symbol)
+    pull(gene_id, symbol) %>%
+    `[`(genes) # restore the original order
 }
 ```
 
@@ -1064,7 +1065,7 @@ symbol2goiset <- function(genes) {
     df %<>% mutate(goi_set = if_else(symbol %in% goi$genes, goi$name, goi_set))
   }
 
-  df %>% pull(goi_set, symbol)
+  (df %>% pull(goi_set, symbol))[genes]
 }
 ```
 
@@ -1126,7 +1127,7 @@ show_goi_pca <- function(sce, genes, group.by = "celltype", colors = ramp(as.cha
     # Plot
     ggplot(aes(x = x, y = y, color = celltype)) +
     geom_point(aes(size = value), alpha = 0.4) +
-    scale_color_manual(values = colors, breaks = gglast(colour)) + 
+    scale_color_manual(values = colors, breaks = gglast(colour)) +
     # theme_void() +
     theme(
       axis.title = element_blank(),
@@ -1147,7 +1148,7 @@ get_goi_genes() %>%
   show_goi_pca(goi$pvf$genes, group.by = "Cell_Cycle", colors = list(`G0` = "Red", `G1` = "Blue", `G2M` = "Orange", `S` = "DarkGreen", `Dead` = "Black"))
 ```
 
-#### Aggregate by sample group
+#### Agg. by sample group
 
 ```{r}
 # Aggregates genes by `group.by` for each geneset from `goi`
@@ -1521,8 +1522,8 @@ sce_dummy %>%
 ```{r}
 scater_show <- function(sce, color.by = "celltype", colors = NULL) {
   items <- sce@colData[[color.by]]
-  
-  colors <- 
+
+  colors <-
     if (all(items %in% names(colors))) colors[items] else ramp(items, palette = "Set 2")
 
   sce %>%
@@ -1534,7 +1535,7 @@ scater_show <- function(sce, color.by = "celltype", colors = NULL) {
             object = (.),
             colour_by = color.by
           ) +
-            scale_color_manual(values = colors) +  # no need for `breaks`
+            scale_color_manual(values = colors) + # no need for `breaks`
             labs(color = color.by) +
             guides(color = guide_legend(override.aes = list(size = 2, alpha = 1))) +
             theme(
@@ -2175,26 +2176,24 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
   # de_table %>% pull(color, symbol)
 
   stopifnot(all(c("a", "b", "w") %in% colnames(coex_df)))
-  
+
   # Symbol -> LFC map
   node_lfc <- de_table %>% pull(lfc, symbol)
-  
+
   # Attach edge color
   coex_df %<>%
     group_by(w > 0) %>%
     mutate(color = ((1 + w / max(abs(w))) / 2)) %>%
     ungroup() %>%
     mutate(color = colorRamp(c("blue", "yellow", "red"))(color) %>% RGB(alpha = 0.2))
-    
+
   # Co-expression graph
   ex_graph <-
     coex_df %>%
-    
     # Take top `n` co-expression edges at both extremes
     group_by(w > 0) %>%
     slice_max(abs(w), n = n) %>%
     ungroup() %>%
-    
     select(a, b, w, color) %>%
     igraph::graph_from_data_frame(
       directed = FALSE,
@@ -2205,38 +2204,40 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
       )
     )
 
-  # Graphs based on OmniPath
   graphs <- list(
+    # Proto-graphs based on OmniPath  
     tf = omnipath.tf,
     lr = omnipath.lr,
-    ia = omnipath.in %>% 
+    ia = omnipath.in %>%
       anti_join(omnipath.tf, by = c("source", "target")) %>%
       anti_join(omnipath.lr, by = c("source", "target"))
   ) %>%
+    # Convert them to `igraph` objects
     lapply(function(df) {
       df %>%
         mutate(W = is_stimulation - is_inhibition) %>%
         select(a = source_genesymbol, b = target_genesymbol, W) %>%
         filter(a %in% igraph::V(ex_graph)$name) %>%
         filter(b %in% igraph::V(ex_graph)$name) %>%
-        group_by(a, b) %>% summarize(W = sum(W), .groups = "keep") %>%
+        group_by(a, b) %>%
+        summarize(W = sum(W), .groups = "keep") %>%
         filter(W != 0) %>%
-        
         # Attach co-expression `w` and edge color
         merge(coex_df %>% select(a, b, w, color), by = c("a", "b")) %>%
-        
         # Ensure correct order
         select(a, b, w, W, color) %>%
         igraph::graph_from_data_frame(directed = TRUE)
     }) %>%
     within({
+      # Attach the co-expression graph
       ex <- ex_graph
-      
+
+      # For the co-expression graph, by definition:
       # `W` is positive iff both LFC are of the same sign
       edges <- ex %>% igraph::as_data_frame("edges")
       igraph::E(ex)$W <- sign(node_lfc[edges$from] * node_lfc[edges$to])
       rm(edges)
-    }) %>% 
+    }) %>%
     lapply(function(g) {
       igraph::E(g)$coherent <- (sign(igraph::E(g)$w) == sign(igraph::E(g)$W))
       return(g)
@@ -2262,117 +2263,96 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
     magrittr::set_colnames(c("x", "y")) %>%
     magrittr::set_rownames(igraph::V(graphs$ex)$name)
 
-  graphs %>%
+  graphs %<>%
     lapply(function(graph) {
-      list(graph = graph, pos = graph_layout) %>%
-        within({
-          # Edges as dataframe
-          E <-
-            graph %>%
-            igraph::get.edgelist() %>%
-            magrittr::set_colnames(c("a", "b")) %>%
-            as.data.frame()
+      list(graph = graph, pos = graph_layout) %>% within({
+        # Edges as dataframe
+        edges <-
+          graph %>%
+          igraph::get.edgelist() %>%
+          magrittr::set_colnames(c("a", "b")) %>%
+          as.data.frame()
 
-          # Attach segment data
-          segment <-
-            cbind(
-              take_rows(pos, E$a) %>% magrittr::set_colnames(c("x", "y")),
-              take_rows(pos, E$b) %>% magrittr::set_colnames(c("xend", "yend"))
-            ) %>%
-            mutate(
-              x = x + (xend - x) * 0.02, xend = xend - (xend - x) * 0.03,
-              y = y + (yend - y) * 0.02, yend = yend - (yend - y) * 0.03
-            )
-        })
-    }) %>%
-    with({
-      list(
-        slide1 = list(
-          alpha = list(ex = 2e-2, tf = 0.80, lr = 3e-2, ia = 3e-2),
-          title = "TF -> target"
-        )
-        , slide2 = list(
-          alpha = list(ex = 2e-2, tf = 3e-2, lr = 0.80, ia = 3e-2),
-          title = "Ligand -> receptor"
-        )
-        , slide3 = list(
-          alpha = list(ex = 2e-2, tf = 3e-2, lr = 3e-2, ia = 0.80),
-          title = "More protein-protein interaction"
-        )
-        , slide4 = list(
-          alpha = list(ex = 0.60, tf = 3e-2, lr = 3e-2, ia = 3e-2),
-          title = "Co-expression"
-        )
-      ) %>% lapply(
-        function(slide) {
-          ggplot() +
-            # Co-expression segments
-            geom_segment(
-              data = ex$segment,
-              aes(x = x, y = y, xend = xend, yend = yend),
-              color = igraph::E(ex$graph)$color,
-              alpha = slide$alpha$ex,
-              size = 0.1,
-              linetype = if_else(igraph::E(ex$graph)$coherent, "solid", "dashed")
-            ) +
-            # TF-target curves
-            geom_curve(
-              data = tf$segment,
-              lineend = "butt", # linejoin = "mitre",
-              aes(x = x, y = y, xend = xend, yend = yend),
-              arrow = arrow(
-                length = unit(0.007, "npc"), 
-                angle = if_else(igraph::E(tf$graph)$W > 0, 10, 90)
-              ),
-              color = igraph::E(tf$graph)$color,
-              alpha = slide$alpha$tf,
-              size = 0.2,
-              curvature = 0.05,
-              linetype = if_else(igraph::E(tf$graph)$coherent, "solid", "dashed")
-            ) +
-            # Ligand-receptor curves
-            geom_curve(
-              data = lr$segment,
-              lineend = "butt", # linejoin = "mitre",
-              aes(x = x, y = y, xend = xend, yend = yend),
-              arrow = arrow(
-                length = unit(0.007, "npc"), 
-                angle = if_else(igraph::E(lr$graph)$W > 0, 10, 90)
-              ),
-              color = igraph::E(lr$graph)$color,
-              alpha = slide$alpha$lr,
-              size = 0.2,
-              curvature = 0.05,
-              linetype = if_else(igraph::E(lr$graph)$coherent, "solid", "dashed")
-            ) +
-            # PPInteraction curves
-            geom_curve(
-              data = ia$segment,
-              lineend = "butt", # linejoin = "mitre",
-              aes(x = x, y = y, xend = xend, yend = yend),
-              arrow = arrow(
-                length = unit(0.007, "npc"), 
-                angle = if_else(igraph::E(ia$graph)$W > 0, 10, 90)
-              ),
-              color = igraph::E(ia$graph)$color,
-              alpha = slide$alpha$ia,
-              size = 0.2,
-              curvature = 0.05,
-              linetype = if_else(igraph::E(ia$graph)$coherent, "solid", "dashed")
-            ) +
-            # Labels
-            geom_text(
-              data = ex$pos,
-              aes(x = x, y = y, label = igraph::V(ex$graph)$name),
-              size = 2,
-              color = igraph::V(ex$graph)$color
-            ) +
-            theme_void() +
-            ggplot2::ggtitle(slide$title) +
-            theme(plot.title = element_text(hjust = 0.95, vjust = -3, size = 10))
-        }
-      )
+        # Attach segment data
+        segment <-
+          cbind(
+            take_rows(pos, edges$a) %>% magrittr::set_colnames(c("x", "y")),
+            take_rows(pos, edges$b) %>% magrittr::set_colnames(c("xend", "yend"))
+          ) %>%
+          mutate(
+            x = x + (xend - x) * 0.02, xend = xend - (xend - x) * 0.03,
+            y = y + (yend - y) * 0.02, yend = yend - (yend - y) * 0.03
+          )
+      })
     })
+
+  list(
+    slide1 = list(
+      alpha = list(ex = 2e-2, tf = 0.77, lr = 3e-2, ia = 3e-2),
+      title = "TF -> target"
+    ),
+    slide2 = list(
+      alpha = list(ex = 2e-2, tf = 3e-2, lr = 0.77, ia = 3e-2),
+      title = "Ligand -> receptor"
+    ),
+    slide3 = list(
+      alpha = list(ex = 2e-2, tf = 3e-2, lr = 3e-2, ia = 0.77),
+      title = "More protein-protein interaction"
+    ),
+    slide4 = list(
+      alpha = list(ex = 0.55, tf = 3e-2, lr = 3e-2, ia = 3e-2),
+      title = "Co-expression"
+    )
+  ) %>% lapply(function(slide) {
+    p <- ggplot()
+
+    p <- p +
+      # Co-expression segments
+      geom_segment(
+        data = graphs$ex$segment,
+        aes(x = x, y = y, xend = xend, yend = yend),
+        color = igraph::E(graphs$ex$graph)$color,
+        alpha = slide$alpha$ex,
+        size = 0.1,
+        linetype = if_else(igraph::E(graphs$ex$graph)$coherent, "solid", "dashed")
+      )
+
+    for (x in c("tf", "lr", "ia")) {
+      E <- igraph::E(graphs[[x]]$graph)
+      p <- p +
+        geom_curve(
+          data = graphs[[x]]$segment,
+          lineend = "butt", # linejoin = "mitre",
+          aes(x = x, y = y, xend = xend, yend = yend),
+          arrow = arrow(
+            length = unit(0.007, "npc"),
+            # activation / inhibition arrow:
+            angle = if_else(E$W > 0, 10, if_else(E$W < 0, 90, 0))
+          ),
+          color = E$color,
+          alpha = slide$alpha[[x]],
+          size = 0.2,
+          curvature = 0.05,
+          linetype = if_else(E$coherent, "solid", "dashed")
+        )
+    }
+
+    p <- p +
+      # Labels
+      geom_text(
+        data = graph_layout,
+        aes(x = x, y = y, label = igraph::V(graphs$ex$graph)$name),
+        size = 2,
+        color = igraph::V(graphs$ex$graph)$color
+      )
+    
+    p <- p +
+      theme_void() +
+      ggplot2::ggtitle(slide$title) +
+      theme(plot.title = element_text(hjust = 0.95, vjust = -3, size = 10))
+
+    return(p)
+  })
 
   # graph %>%
   #   igraph::plot.igraph(
@@ -2388,9 +2368,9 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
   #     layout = graph_layout
   #   )
 }
-# ```
-# 
-# ```{r, dpi=36, out.extra='class="scrollable"', out.width='30%', results='hide'}
+```
+
+```{r, dpi=36, out.extra='class="scrollable"', out.width='30%', results='hide'}
 sce_dummy %>%
   `[`(, (.)$group == "healthy") %>%
   take_rows(get_goi_genes()) %>%
@@ -2402,12 +2382,16 @@ sce_dummy %>%
 
 ```{r}
 requireNamespace("visNetwork")
-omnipath.in %>%
+omnipath.tf %>%
   mutate(a = source_genesymbol, b = target_genesymbol) %>%
   filter(a %in% get_goi_genes(), b %in% get_goi_genes()) %>%
   select(a, b) %>%
   igraph::graph_from_data_frame(directed = FALSE) %>%
-  visNetwork::visIgraph(layout = 'layout_with_kk')
+  visNetwork::toVisNetworkData() %>%
+  {
+    visNetwork::visNetwork(nodes = .$nodes, edges = .$edges, layout = "layout_with_kk") %>%
+      visNetwork::visPhysics(enabled = FALSE)
+  }
 ```
 
 ##### Scenic
@@ -3319,13 +3303,19 @@ de$dm_eae_vs_hthy$table %>%
 
 ### GO {.tabset}
 
+
+
 #### Compute
+
+Use DE results from EdgeR.
 
 ```{r, cache=TRUE, message=FALSE}
 go <-
-  list(A = 33, B = 77, C = 144) %>% lapply(function(n) {
+  list(n33 = 33, n77 = 77, n150 = 150) %>% lapply(function(n) {
     de %>% lapply(function(de_result) {
-      de_result$table %>% compute_go(n = n)
+      de_result$table %>%
+        filter(src == "edgeR") %>%
+        compute_go(n = n)
     })
   })
 ```
@@ -3333,31 +3323,31 @@ go <-
 #### AB: Other/375_VLMC
 
 ```{r}
-go$A$ab_other_vs_375 %>% show_go_table()
+go$n33$ab_other_vs_375 %>% show_go_table()
 ```
 
 #### Bh: FB2/FB1
 
 ```{r}
-go$A$bh_fb2_vs_fb1 %>% show_go_table()
+go$n33$bh_fb2_vs_fb1 %>% show_go_table()
 ```
 
 #### CB: Other/VLMC3
 
 ```{r}
-go$A$cb_other_vs_vlmc3 %>% show_go_table()
+go$n33$cb_other_vs_vlmc3 %>% show_go_table()
 ```
 
 #### CB (reduced): EAE/Ctrl
 
 ```{r}
-go$A$cb_eae_vs_ctrl %>% show_go_table()
+go$n33$cb_eae_vs_ctrl %>% show_go_table()
 ```
 
 #### Dm: EAE/Healthy
 
 ```{r}
-go$A$dm_eae_vs_hthy %>% show_go_table()
+go$n33$dm_eae_vs_hthy %>% show_go_table()
 ```
 
 
