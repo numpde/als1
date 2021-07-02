@@ -8,7 +8,6 @@ This takes forever.
 """
 
 from bugs import *
-from tcga.utils import at_most_n
 from z_sources import URLS, download
 
 out_dir = mkdir(Path(__file__).with_suffix(''))
