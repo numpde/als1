@@ -1030,6 +1030,13 @@ goi <-
         # http://www.informatics.jax.org/vocab/gene_ontology/GO:0006096
         c("Actn3", "Adpgk", "Aldoa", "Aldoart1", "Aldoart2", "Aldob", "Aldoc", "App", "Bpgm", "Cbfa2t3", "Ddit4", "Dhtkd1", "Eif6", "Eno1", "Eno2", "Eno3", "Eno4", "Entpd5", "Ep300", "Esrrb", "Fbp1", "Foxk1", "Foxk2", "Gale", "Galk1", "Galt", "Gapdh", "Gapdhs", "Gck", "Git1", "Gm10358", "Gm11214", "Gm12117", "Gm15294", "Gm3839", "Gpd1", "Gpi", "Hdac4", "Hif1a", "Hk1", "Hk2", "Hk3", "Hkdc1", "Htr2a", "Ier3", "Ifng", "Igf1", "Il3", "Ins2", "Insr", "Jmjd8", "Khk", "Mif", "Mlxipl", "Mpi", "Mtch2", "Myc", "Myog", "Ncor1", "Nupr1", "Ogdh", "Ogt", "P2rx7", "Pfkfb2", "Pfkl", "Pfkm", "Pfkp", "Pgam1", "Pgam2", "Pgk1", "Pgk2", "Pklr", "Pkm", "Ppara", "Ppargc1a", "Prkaa1", "Prkaa2", "Prkag2", "Prkag3", "Prxl2c", "Psen1", "Sirt6", "Slc2a6", "Slc4a1", "Slc4a4", "Stat3", "Tigar", "Tkfc", "Tpi1", "Trex1", "Zbtb20", "Zbtb7a")
       )
+    ),
+    
+    # https://reactome.org/PathwayBrowser/#/R-MMU-877300&SEL=R-MMU-873829&DTAB=MT
+    # Motivated by https://www.nature.com/articles/s41593-020-00770-9
+    ifng_signaling = list(
+      name = "Interferon gamma signaling",
+      genes = c("Ifngr1", "Ifngr2", "Jak1", "Jak2", "Ifng")
     )
   )
 ```
@@ -2676,7 +2683,7 @@ load_dataset$dm <- function(max.size = 9999) {
 
 #### Read from disk
 
-```{r, cache=TRUE}
+```{r}
 datasets <- load_dataset %>% lapply(\(loader) loader(max.size = 777))
 ```
 
