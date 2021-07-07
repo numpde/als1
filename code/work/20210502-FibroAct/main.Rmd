@@ -62,7 +62,7 @@ suppressPackageStartupMessages({
 
   # install.packages("RCurl")
   requireNamespace("RCurl")
-  
+
   # install.packages("memoise")
   requireNamespace("memoise")
 
@@ -98,7 +98,7 @@ suppressPackageStartupMessages({
   # BiocManager::install("org.Hs.eg.db")
   requireNamespace("org.Mm.eg.db")
   requireNamespace("org.Hs.eg.db")
-  
+
   # BiocManager::install("GO.db")
   requireNamespace("GO.db")
 
@@ -313,7 +313,7 @@ dir.create(out_file(""), showWarnings = FALSE)
 ```{r}
 memo <- function(f) {
   memoise::memoise(
-    f, 
+    f,
     cache = cachem::cache_disk(BASEPATH$join("main_cache/memoized")$show)
   )
 }
@@ -519,7 +519,7 @@ Zoomable figures.
 $(document).ready(
   function() {
     $("img.zoomable").on("click", function(evt) {
-      if (evt.originalEvent.shiftKey) {
+      if (!evt.originalEvent.shiftKey && evt.originalEvent.altKey) {
         var el = $(this).clone();
         el.attr("width", "2048px");
         window.open().document.write(el.wrap('<p>').parent().html());
@@ -531,7 +531,7 @@ $(document).ready(
 //*/
 ```
 
-Shift+click on a figure to zoom:
+Alt+click on a figure to zoom:
 
 ```{r, out.extra='class="zoomable"', dpi=36, out.width='20%', results='hide'}
 list(
@@ -553,17 +553,28 @@ $(document).ready(
       'position': 'absolute', 'top': 0, 'left': 0, 'z-index': 100000,
     });
     
-    $("img.scrollable").parent().css({'position': 'relative'});
-    $("img.scrollable").parent().find('img:first').css({'position': 'relative'});
+    var parent = $("img.scrollable").parent();
+    
+    parent.css({'position': 'relative'});
+    parent.find('img:first').css({'position': 'relative'});
+    
+    // associate a 'history' stack with each parent
+    parent.each(function(i, el) { $(el).data("stack", new Array()); })
     
     $("img.scrollable").on("click", function(evt) {
-      if (!evt.originalEvent.altKey && !evt.originalEvent.shiftKey) {
-        $(this).css({'z-index': parseInt($(this).css('z-index'), 10) - 1});
-        evt.stopPropagation();
-        return false;
-      };
+      if (evt.originalEvent.altKey) return true;
       
-      return true;
+      if (!evt.originalEvent.shiftKey) {
+        var last = $(this);
+        last.parent().data("stack").push(last);
+        if (last) last.css({'z-index': parseInt(last.css('z-index'), 10) - 1});
+      } else {
+        var last = $(this).parent().data("stack").pop();
+        if (last) last.css({'z-index': parseInt(last.css('z-index'), 10) + 1});
+      }
+      
+      evt.stopPropagation();
+      return false;
     });
   }
 );
@@ -604,7 +615,7 @@ take_rows <- function(df, rows = NULL) {
 
 ```{r}
 # For reading wide tables
-Sys.setenv("VROOM_CONNECTION_SIZE" = 2**18)
+Sys.setenv("VROOM_CONNECTION_SIZE" = 2 ** 19)
 
 from_tsv <- function(filename, sep = "\t") {
   filename %>%
@@ -639,10 +650,40 @@ shample <- function(df) {
 
 ```{r}
 # Constructs a `SingleCellExperiment` checking consistency of sample names
-make_sce <- function(counts, coldata) {
+make_sce <- function(counts, coldata, dealias = TRUE) {
   # Check that samples in counts = genes x samples
   # are ordered as in coldata = samples x metafields
   stopifnot(assertthat::are_equal(colnames(counts), rownames(coldata)))
+  
+  if (dealias) {
+    # TODO: get a list of aliases
+    gene_alias = data.frame(
+      old = c("1810011O10Rik"),
+      new = c("Tcim")
+    )
+    
+    # Check that the "old -> new" mapping is well-defined
+    stopifnot(!any(duplicated(gene_alias$old)))
+    
+    # Note: we are not checking whether rownames(counts) is unique
+    
+    new <- 
+      rownames(counts) %>%
+      data.frame(old = .) %>%
+      # For all joins, rows will be duplicated if one or more rows in x matches multiple rows in y
+      left_join(y = gene_alias, by = "old") %>%
+      # Coalesce
+      mutate(new = if_else(!is.na(new), new, old)) %>%
+      pull(new, old) %>%
+      # "'names(x)' must be NULL or a character vector with no attributes"
+      as.character()
+    
+    # Most gene names should be still the same
+    stopifnot(mean(new == rownames(counts)) > 0.9)
+    
+    counts %<>%
+      magrittr::set_rownames(new)
+  }
 
   SingleCellExperiment::SingleCellExperiment(
     assays = list(counts = counts), colData = coldata
@@ -980,7 +1021,7 @@ goi <-
         # "Early response" transcription factors: Fos, Fosb, Junb
         # From 2018-Vanlandewijck-He-...-Betsholtz:
         # "A molecular atlas of cell types and zonation in the brain vasculature"
-        c("Fos", "Fosb", "Junb", "Egr1"),  # Jun is below
+        c("Fos", "Fosb", "Junb", "Egr1"), # Jun is below
 
         # Wikipathways Neuroinflammation:
         # https://www.wikipathways.org/instance/WP4919_r111814
@@ -989,7 +1030,7 @@ goi <-
         c("Ascc1", "Chuk", "Fos", "Jun", "Mapk14", "Mapk8", "mt-Co1", "mt-Co2", "Mtor", "Nfkbia", "Nos2", "Rela", "Tlr4")
       ))
     ),
-    
+
     # From 2018-Vanlandewijck-He-...-Betsholtz
     # Pericyte markers:
     # Pdgfrb, Cspg4, and Des
@@ -998,10 +1039,14 @@ goi <-
     # Fibroblast markers:
     # Pdgfra, Lum and Dcn
 
-    # From 2021-Manberg-...-Lewandowski, p.643
     pvf = list(
       name = "PVF",
-      genes = c("Spp1", "Col6a1", "Col1a1", "Mmp2")
+      genes = c(
+        # From 2021-Manberg-...-Lewandowski, p.643
+        "Spp1", "Col6a1", "Col1a1", "Mmp2", 
+        # From 2018-Vanlandewijck-He-...-Betsholtz
+        "Pdgfra", "Lum", "Dcn"
+      )
     ),
 
     # Collagen
@@ -1061,12 +1106,17 @@ goi <-
         c("Actn3", "Adpgk", "Aldoa", "Aldoart1", "Aldoart2", "Aldob", "Aldoc", "App", "Bpgm", "Cbfa2t3", "Ddit4", "Dhtkd1", "Eif6", "Eno1", "Eno2", "Eno3", "Eno4", "Entpd5", "Ep300", "Esrrb", "Fbp1", "Foxk1", "Foxk2", "Gale", "Galk1", "Galt", "Gapdh", "Gapdhs", "Gck", "Git1", "Gm10358", "Gm11214", "Gm12117", "Gm15294", "Gm3839", "Gpd1", "Gpi", "Hdac4", "Hif1a", "Hk1", "Hk2", "Hk3", "Hkdc1", "Htr2a", "Ier3", "Ifng", "Igf1", "Il3", "Ins2", "Insr", "Jmjd8", "Khk", "Mif", "Mlxipl", "Mpi", "Mtch2", "Myc", "Myog", "Ncor1", "Nupr1", "Ogdh", "Ogt", "P2rx7", "Pfkfb2", "Pfkl", "Pfkm", "Pfkp", "Pgam1", "Pgam2", "Pgk1", "Pgk2", "Pklr", "Pkm", "Ppara", "Ppargc1a", "Prkaa1", "Prkaa2", "Prkag2", "Prkag3", "Prxl2c", "Psen1", "Sirt6", "Slc2a6", "Slc4a1", "Slc4a4", "Stat3", "Tigar", "Tkfc", "Tpi1", "Trex1", "Zbtb20", "Zbtb7a")
       )
     ),
-    
+
     # https://reactome.org/PathwayBrowser/#/R-MMU-877300&SEL=R-MMU-873829&DTAB=MT
     # Motivated by https://www.nature.com/articles/s41593-020-00770-9
     ifng_signaling = list(
       name = "Interferon gamma signaling",
       genes = c("Ifngr1", "Ifngr2", "Jak1", "Jak2", "Ifng")
+    ),
+    
+    eae_common_up = list(
+      name = "Consistently up in EAE",
+      genes = c("Wif1", "Flrt2", "Tcim", "Ifi47", "Aqp1", "Npy1r", "Serpina3g", "Tbc1d7", "Mical2", "Kng1", "Plac8", "Rai14", "Cd74", "Adam12", "Tjp2", "Cd44", "H2-Aa", "Cldn11", "Ctxn1")
     )
   )
 ```
@@ -1367,11 +1417,9 @@ if (!("c0" %in% names(goi))) {
 ##### Visualizing in heatmap
 
 ```{r}
-heatmap <- function(
-  sce, colors = NULL, 
-  anno_col = NULL, anno_row = NULL, 
-  ...
-) {
+heatmap <- function(sce, colors = NULL,
+                    anno_col = NULL, anno_row = NULL,
+                    ...) {
   # `colors` should be like list(`negative` = "Blue", `positive` = "Red", ...)
   colors %<>% c(NULL) %>% unlist()
 
@@ -1391,8 +1439,6 @@ heatmap <- function(
     ) %>%
     dual(cbind)
 
-  # print(anno_col %>% as.list() %>% lapply(\(x) if (all(x %in% names(colors))) colors[unique(as.character(x))] else ramp(x)))
-
   sce %>%
     SingleCellExperiment::counts() %>%
     log1p() %>%
@@ -1410,9 +1456,19 @@ heatmap <- function(
       annotation_col = anno_col,
       annotation_row = anno_row,
       annotation_colors = c(
-        anno_row %>% as.list() %>% lapply(ramp),
-        anno_col %>% as.list() %>% lapply(\(x) if (all(x %in% names(colors))) colors[unique(as.character(x))] %>% unlist() else ramp(x))
         # TODO: use blue-red for LFC
+        anno_row %>%
+          as.list() %>%
+          lapply(ramp),
+        anno_col %>%
+          as.list() %>%
+          lapply(function(x) {
+            if (all(x %in% names(colors))) {
+              colors[unique(as.character(x))] %>% unlist()
+            } else {
+              ramp(x)
+            }
+          })
       ),
       ...
     )
@@ -1527,7 +1583,7 @@ data.frame(
   subgroup = sce_dummy$subgroup
 ) %>%
   ggplot(aes(x = x, color = subgroup)) +
-  scale_color_manual(values = colors[gglast(colour)]) +
+  scale_color_manual(values = colors[as.character(gglast(colour))]) +
   geom_density()
 ```
 
@@ -1566,10 +1622,11 @@ scater_show <- function(sce, color.by = "celltype", colors = NULL) {
   items <- sce@colData[[color.by]]
 
   colors <-
-    if (all(items %in% names(colors))) 
-      colors[items] 
-    else
+    if (all(items %in% names(colors))) {
+      colors[unique(as.character(items))]
+    } else {
       ramp(items, palette = "Set 2")
+    }
 
   sce %>%
     {
@@ -1847,7 +1904,7 @@ lfc_colors <- function(sce, design, colors) {
 
   f <- sce@colData[[f %>% colnames()]]
 
-  cc <- colors[f %>% levels()]
+  cc <- colors[as.character(f %>% levels())] # TODO: need `as.character`?
   cc <- c(cc[[1]], (rowMeans(col2rgb(cc[-1])) / 255) %>% as.list() %>% dual(rgb))
 
   (. %>% (colorRamp(cc)) %>% RGB())
@@ -2156,17 +2213,21 @@ sce_dummy.go %>% show_go_table()
 
 ```{r}
 go_info <- list(
-  tax = list(mm = path_to("*/*/*/*_mouse_sym2cat.txt.gz") %>% read.csv(sep='\t')),
-  obo = path_to("*/*/*/obo_go.txt.gz") %>% read.csv(sep='\t')
+  tax = list(mm = path_to("*/*/*/*_mouse_sym2cat.txt.gz") %>% read.csv(sep = "\t")),
+  obo = path_to("*/*/*/obo_go.txt.gz") %>% read.csv(sep = "\t")
 )
 ```
 
 ```{r}
-go_info$tax$mm %>% head %>% kable
+go_info$tax$mm %>%
+  head() %>%
+  kable()
 ```
 
 ```{r}
-go_info$obo %>% head %>% kable
+go_info$obo %>%
+  head() %>%
+  kable()
 ```
 
 ```{r}
@@ -2174,8 +2235,8 @@ go2symbols <- function(go_term) {
   with(
     go_info,
     merge(tax$mm, filter(obo, stringr::str_detect(term, go_term)), by = "goid") %>%
-    pull(symbol) %>%
-    unique()
+      pull(symbol) %>%
+      unique()
   )
 }
 ```
@@ -2291,7 +2352,7 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
     )
 
   graphs <- list(
-    # Proto-graphs based on OmniPath  
+    # Proto-graphs based on OmniPath
     tf = omnipath.tf,
     lr = omnipath.lr,
     ia = omnipath.in %>%
@@ -2431,7 +2492,7 @@ show_coex_graph <- function(coex_df, de_table, n = 77) {
         size = 2,
         color = igraph::V(graphs$ex$graph)$color
       )
-    
+
     p <- p +
       theme_void() +
       ggplot2::ggtitle(slide$title) +
@@ -2680,11 +2741,6 @@ load_dataset$cb <- function(max.size = 9999) {
     make_sce(
       counts = path_to("*/CasteloBranco-2018/*/expr.*.gz") %>%
         from_tsv() %>%
-        {
-          # TODO: 1810011O10Rik	-> Tcim
-          # https://www.genecards.org/cgi-bin/carddisp.pl?gene=TCIM
-          (.)
-        } %>%
         t(),
       coldata = path_to("*/CasteloBranco-2018/*/meta.*.gz") %>%
         from_tsv()
@@ -3003,13 +3059,19 @@ datasets$dm %>% show_goi_pca(goi$pvf$genes, group.by = "cluster")
 
 ### Geneset ratio {.tabset}
 
+Click on the plot to 
+scroll
+through the comparisons
+(shift-click to cycle back).
+
 #### Prepare
 
 ```{r}
 pairs.to.contrast <-
   list(
     list(A = goi$col$name, B = goi$air$name),
-    list(A = goi$glycolysis$name, B = goi$air$name)
+    list(A = goi$glycolysis$name, B = goi$air$name),
+    list(A = goi$fib_mig$name, B = goi$air$name)
   )
 ```
 
@@ -3035,11 +3097,11 @@ show_ab_density <- function(sce, group.by = "celltype", colors = ramp(sce@colDat
       ) %>% {
         (.) %>%
           ggplot(aes(x = (a - b), color = g)) +
-          labs(x = paste0(A, " - ", B)) +
+          labs(x = paste0(" - ", B, " + ", A)) +
           labs(y = "Fraction of cells (i.e., density)") +
           labs(color = group.by) +
           scale_color_manual(values = colors, breaks = gglast(colour)) +
-          ggtitle(paste0(A, " vs ", B)) +
+          #ggtitle(paste0(A, " vs ", B)) +
           geom_density(size = 3)
       }
     }))
@@ -3077,10 +3139,10 @@ show_ab_2d <- function(sce, group.by = "celltype", colors = ramp(sce@colData[[gr
           ggplot(aes(x = x, y = y, color = g, size = s)) +
           labs(x = A, y = B, color = group.by, size = "Library size") +
           scale_color_manual(values = colors, breaks = gglast(colour)) +
-          geom_point(size = 5, alpha = 0.6) +
-          ggtitle(paste0(A, " vs ", B)) +
+          geom_point(alpha = 0.6) +
+          #ggtitle(paste0(A, " vs ", B)) +
           guides(shape = FALSE) +
-          geom_density_2d(size = 0.5) +
+          geom_density_2d(size = 0.3, alpha = 0.5) +
           guides(color = guide_legend(override.aes = list(alpha = 1)))
       }
     }))
@@ -3089,51 +3151,51 @@ show_ab_2d <- function(sce, group.by = "celltype", colors = ramp(sce@colData[[gr
 
 #### Allen Brain
 
-```{r, warning=FALSE, results='hide'}
+```{r, warning=FALSE, out.extra='class="scrollable"',  results='hide'}
 datasets$ab %>% show_ab_density(group.by = "celltype", colors = colors)
 ```
 
-```{r, warning=FALSE, results='hide'}
+```{r, warning=FALSE, out.extra='class="scrollable"', results='hide'}
 datasets$ab %>% show_ab_2d(group.by = "celltype", colors = colors)
 ```
 
 #### Betsholtz
 
-```{r, warning=FALSE, results='hide'}
+```{r, warning=FALSE, out.extra='class="scrollable"', results='hide'}
 datasets$bh %>% show_ab_density(group.by = "celltype", colors = colors)
 ```
 
-```{r, warning=FALSE, results='hide'}
+```{r, warning=FALSE, out.extra='class="scrollable"', results='hide'}
 datasets$bh %>% show_ab_2d(group.by = "celltype", colors = colors)
 ```
 
 #### Castelo-Branco
 
-```{r, warning=FALSE, results='hide'}
+```{r, warning=FALSE, out.extra='class="scrollable"', results='hide'}
 datasets$cb %>% show_ab_density(group.by = "celltype", colors = colors)
 ```
 
-```{r, warning=FALSE, results='hide'}
+```{r, warning=FALSE, out.extra='class="scrollable"', results='hide'}
 datasets$cb %>% show_ab_2d(group.by = "celltype", colors = colors)
 ```
 
 #### Daneman: clusters
 
-```{r, warning=FALSE, results='hide'}
+```{r, warning=FALSE, out.extra='class="scrollable"', results='hide'}
 datasets$dm %>% show_ab_density(group.by = "cluster")
 ```
 
-```{r, warning=FALSE, results='hide'}
+```{r, warning=FALSE, out.extra='class="scrollable"', results='hide'}
 datasets$dm %>% show_ab_2d(group.by = "cluster")
 ```
 
 #### Daneman: subgroup
 
-```{r, warning=FALSE, results='hide'}
+```{r, warning=FALSE, out.extra='class="scrollable"', results='hide'}
 datasets$dm %>% show_ab_density(group.by = "subgroup", colors = colors)
 ```
 
-```{r, warning=FALSE, results='hide'}
+```{r, warning=FALSE, out.extra='class="scrollable"', results='hide'}
 datasets$dm %>% show_ab_2d(group.by = "subgroup", colors = colors)
 ```
 
@@ -3170,59 +3232,47 @@ de <- list(
 show_heatmap_slides <- function(sce, de_table) {
   genesets <- list(
     list(name = "Chemokine activity", genes = go2symbols("^chemokine activity")),
-    
     list(name = "Cytokine activity", genes = go2symbols("^cytokine activity")),
-    
     list(name = "Neuron projection", genes = go2symbols("neuron projection")),
-    
     list(name = "Cell adhesion", genes = go2symbols("cell adhesion")),
-    
     list(name = "Immune response", genes = go2symbols("immune response")),
-    
     list(name = "Inflammatory", genes = go2symbols("inflammatory")),
-    
     list(name = "Fibroblast growth factor", genes = go2symbols("fibroblast growth factor")),
-    
     list(name = "Smooth muscle", genes = go2symbols("smooth muscle")),
-    
     list(name = "Cell communication", genes = go2symbols("cell communication")),
-    
     list(name = "Chemotaxis", genes = go2symbols("chemotaxis")),
-    
     list(name = "Amyloid", genes = go2symbols("amyloid")),
-    
     list(name = "Insulin", genes = go2symbols("insulin")),
-    
     list(name = "Wounding", genes = go2symbols("wounding")),
-    
     list(name = "Actin filament", genes = go2symbols("actin filament")),
-    
     list(name = "Apoptosis", genes = go2symbols("apoptosis")),
-    
     goi$fib_mig,
     goi$neuroinflammation,
     goi$air,
     goi$glycolysis,
+    goi$col,
+    goi$eae_common_up,
     list(name = "Most-DE genes", genes = de_table$symbol, n = 33)
   )
-  
-  #genesets <- goi[c("glycolysis", "fib_mig")]  # DEBUG
-  
+
+  # genesets <- goi[c("glycolysis", "fib_mig")]  # DEBUG
+
   # default max number of genes to show
   n <- 47
-  
+
   genesets %>% lapply(function(geneset) {
-    geneset %>% 
+    geneset %>%
       with({
         sub_de_table <- de_table %>% filter(symbol %in% genes)
-        
-        if (!(any(rownames(sce) %in% sub_de_table$symbol)))
+
+        if (!(any(rownames(sce) %in% sub_de_table$symbol))) {
           return()
-        
+        }
+
         show_de_heatmap(
           sce,
-          sub_de_table, 
-          colors = colors, 
+          sub_de_table,
+          colors = colors,
           cluster_cols = FALSE,
           n = n,
           main = name
@@ -3251,7 +3301,8 @@ de$ab_other_vs_375$table %>% show_de_table()
 
 ##### Heatmaps of most-DE genes and other sets (edgeR)
 
-Click on the image to cycle through the sets.
+Click on the image to cycle through the sets
+(shift-click to cycle back).
 
 ```{r, dpi=72, out.extra='class="scrollable"', results='hide'}
 show_heatmap_slides(
@@ -3536,7 +3587,7 @@ the expected effect,
 e.g. inhibition is expected but positive co-expression is observed.
 
 Click on the figure to change the view;
-shift-click to enlarge.
+alt-click to enlarge.
 
 #### Allen Brain
 
@@ -4179,7 +4230,7 @@ common_map_3d <- function(sce, color.by = "subgroup") {
 datasets$combo %>% common_map()
 ```
 
-```{r, cache=TRUE, message=FALSE, warning=FALSE}
+```{r, message=FALSE, warning=FALSE}
 datasets$combo %>% common_map_3d()
 ```
 
@@ -4195,7 +4246,7 @@ datasets$combo %>%
   common_map()
 ```
 
-```{r, cache=TRUE, message=FALSE, warning=FALSE}
+```{r, message=FALSE, warning=FALSE}
 datasets$combo %>%
   take_rows(geneset) %>%
   common_map_3d()
@@ -4213,7 +4264,7 @@ datasets$combo %>%
   common_map()
 ```
 
-```{r, cache=TRUE, message=FALSE, warning=FALSE}
+```{r, message=FALSE, warning=FALSE}
 datasets$combo %>%
   take_rows(geneset) %>%
   common_map_3d()
@@ -4231,7 +4282,7 @@ datasets$combo %>%
   common_map()
 ```
 
-```{r, cache=TRUE, message=FALSE, warning=FALSE}
+```{r, message=FALSE, warning=FALSE}
 datasets$combo %>%
   take_rows(geneset) %>%
   common_map_3d()
@@ -4249,7 +4300,7 @@ datasets$combo %>%
   common_map()
 ```
 
-```{r, cache=TRUE, message=FALSE, warning=FALSE}
+```{r, message=FALSE, warning=FALSE}
 datasets$combo %>%
   take_rows(geneset) %>%
   common_map_3d()
@@ -4267,7 +4318,7 @@ datasets$combo %>%
   common_map()
 ```
 
-```{r, cache=TRUE, message=FALSE, warning=FALSE}
+```{r, message=FALSE, warning=FALSE}
 datasets$combo %>%
   take_rows(geneset) %>%
   common_map_3d()
