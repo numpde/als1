@@ -62,6 +62,9 @@ suppressPackageStartupMessages({
 
   # install.packages("RCurl")
   requireNamespace("RCurl")
+  
+  # install.packages("memoise")
+  requireNamespace("memoise")
 
   # install.packages("dplyr")
   library(dplyr)
@@ -95,6 +98,9 @@ suppressPackageStartupMessages({
   # BiocManager::install("org.Hs.eg.db")
   requireNamespace("org.Mm.eg.db")
   requireNamespace("org.Hs.eg.db")
+  
+  # BiocManager::install("GO.db")
+  requireNamespace("GO.db")
 
   # https://www.bioconductor.org/packages/release/bioc/vignettes/goseq/inst/doc/goseq.pdf
   # BiocManager::install("goseq")
@@ -278,6 +284,8 @@ culprits() %>% head(3)
 
 #### Paths
 
+##### Root 
+
 ```{r}
 for (i in 1:2) {
   BASEPATH <- pathlibr::Path$new(Sys.glob(paste(c("work", ".."), "*FibroAct", sep = "/")))
@@ -289,6 +297,8 @@ print(paste("Work path:", BASEPATH))
 stopifnot("main.Rmd" %in% names(BASEPATH$dir))
 ```
 
+##### Finding paths
+
 ```{r}
 path_to <- (function(.) Sys.glob(BASEPATH$join("../..")$join(.)$show))
 ```
@@ -296,6 +306,17 @@ path_to <- (function(.) Sys.glob(BASEPATH$join("../..")$join(.)$show))
 ```{r}
 out_file <- (function(.) BASEPATH$join("output")$join(.)$show)
 dir.create(out_file(""), showWarnings = FALSE)
+```
+
+##### Memoization to disk
+
+```{r}
+memo <- function(f) {
+  memoise::memoise(
+    f, 
+    cache = cachem::cache_disk(BASEPATH$join("main_cache/memoized")$show)
+  )
+}
 ```
 
 #### Tables
@@ -600,7 +621,6 @@ to_tsv <- function(df, fn, sep = "\t") {
   vroom::vroom_write(df, out_file(fn), delim = sep)
 }
 ```
-
 
 
 ##### Random sub-dataframe
@@ -958,7 +978,9 @@ goi <-
       name = "Neuroinflammation",
       genes = unique(c(
         # "Early response" transcription factors: Fos, Fosb, Junb
-        c("Fos", "Fosb", "Junb"),
+        # From 2018-Vanlandewijck-He-...-Betsholtz:
+        # "A molecular atlas of cell types and zonation in the brain vasculature"
+        c("Fos", "Fosb", "Junb", "Egr1"),  # Jun is below
 
         # Wikipathways Neuroinflammation:
         # https://www.wikipathways.org/instance/WP4919_r111814
@@ -967,6 +989,14 @@ goi <-
         c("Ascc1", "Chuk", "Fos", "Jun", "Mapk14", "Mapk8", "mt-Co1", "mt-Co2", "Mtor", "Nfkbia", "Nos2", "Rela", "Tlr4")
       ))
     ),
+    
+    # From 2018-Vanlandewijck-He-...-Betsholtz
+    # Pericyte markers:
+    # Pdgfrb, Cspg4, and Des
+    # SMC:
+    # Acta2 and Tagln
+    # Fibroblast markers:
+    # Pdgfra, Lum and Dcn
 
     # From 2021-Manberg-...-Lewandowski, p.643
     pvf = list(
@@ -1337,7 +1367,11 @@ if (!("c0" %in% names(goi))) {
 ##### Visualizing in heatmap
 
 ```{r}
-heatmap <- function(sce, colors = NULL, anno_col = NULL, anno_row = NULL, ...) {
+heatmap <- function(
+  sce, colors = NULL, 
+  anno_col = NULL, anno_row = NULL, 
+  ...
+) {
   # `colors` should be like list(`negative` = "Blue", `positive` = "Red", ...)
   colors %<>% c(NULL) %>% unlist()
 
@@ -1378,6 +1412,7 @@ heatmap <- function(sce, colors = NULL, anno_col = NULL, anno_row = NULL, ...) {
       annotation_colors = c(
         anno_row %>% as.list() %>% lapply(ramp),
         anno_col %>% as.list() %>% lapply(\(x) if (all(x %in% names(colors))) colors[unique(as.character(x))] %>% unlist() else ramp(x))
+        # TODO: use blue-red for LFC
       ),
       ...
     )
@@ -1531,7 +1566,10 @@ scater_show <- function(sce, color.by = "celltype", colors = NULL) {
   items <- sce@colData[[color.by]]
 
   colors <-
-    if (all(items %in% names(colors))) colors[items] else ramp(items, palette = "Set 2")
+    if (all(items %in% names(colors))) 
+      colors[items] 
+    else
+      ramp(items, palette = "Set 2")
 
   sce %>%
     {
@@ -1566,7 +1604,7 @@ sce_dummy %>%
 
 ##### Plotting (3d)
 
-Template, not for direct use.
+Prototype, not for direct use.
 
 ```{r}
 pca3d_template <- function(sce, color.by = "celltype", colors = ramp(sce@colData[[color.by]])) {
@@ -1845,7 +1883,7 @@ compute_de <- function(sce, design) {
 }
 ```
 
-##### Example:
+##### Example
 
 ```{r}
 sce_dummy.de <- sce_dummy %>% compute_de(~group)
@@ -1903,10 +1941,10 @@ sce_dummy.de$table %>%
 ##### As heatmap
 
 ```{r}
-show_de_heatmap <- function(sce, de_table, ...) {
+show_de_heatmap <- function(sce, de_table, n = 33, ...) {
   top <- de_table %>%
     group_by(lfc > 0) %>%
-    slice_min(p, n = 33, with_ties = FALSE) %>%
+    slice_min(p, n = n, with_ties = FALSE) %>%
     ungroup() %>%
     arrange(lfc) %>%
     select(symbol, lfc, p) %>%
@@ -2114,6 +2152,47 @@ rbind(
 sce_dummy.go %>% show_go_table()
 ```
 
+##### Gene-categorty associations
+
+```{r}
+go_info <- list(
+  tax = list(mm = path_to("*/*/*/*_mouse_sym2cat.txt.gz") %>% read.csv(sep='\t')),
+  obo = path_to("*/*/*/obo_go.txt.gz") %>% read.csv(sep='\t')
+)
+```
+
+```{r}
+go_info$tax$mm %>% head %>% kable
+```
+
+```{r}
+go_info$obo %>% head %>% kable
+```
+
+```{r}
+go2symbols <- function(go_term) {
+  with(
+    go_info,
+    merge(tax$mm, filter(obo, stringr::str_detect(term, go_term)), by = "goid") %>%
+    pull(symbol) %>%
+    unique()
+  )
+}
+```
+
+```{r}
+# example: "inflammatory"
+list(
+  sce = sce_dummy,
+  genes = go2symbols("infla"),
+  table = sce_dummy.de$table %>% filter(src == "edgeR")
+) %>%
+  with(
+    sce %>%
+      .[, order(.$subgroup)] %>%
+      show_de_heatmap(table %>% filter(symbol %in% genes), colors = colors, cluster_cols = FALSE)
+  )
+```
 
 
 #### Misc
@@ -2684,7 +2763,7 @@ load_dataset$dm <- function(max.size = 9999) {
 #### Read from disk
 
 ```{r}
-datasets <- load_dataset %>% lapply(\(loader) loader(max.size = 777))
+datasets <- load_dataset %>% lapply(\(loader) memo(loader)(max.size = 777))
 ```
 
 ##### Attach reduced dimensions
@@ -2701,7 +2780,7 @@ datasets <- datasets %>% lapply(scater_attach)
 
 ##### Cell type / Donor
 
-```{r, echo=FALSE}
+```{r, cache=TRUE}
 gridExtra::grid.arrange(
   datasets$ab %>% scater_show(color.by = "celltype", colors = colors),
   datasets$ab %>% scater_show(color.by = "donor_sex_label"),
@@ -2713,7 +2792,7 @@ gridExtra::grid.arrange(
 
 ##### Cell type / Mouse ID
 
-```{r, echo=FALSE}
+```{r, cache=TRUE}
 gridExtra::grid.arrange(
   datasets$bh %>% scater_show(color.by = "celltype", colors = colors),
   datasets$bh %>% scater_show(color.by = "Mouse ID"),
@@ -2725,7 +2804,7 @@ gridExtra::grid.arrange(
 
 ##### Cell type / Group
 
-```{r, echo=FALSE}
+```{r, cache=TRUE}
 gridExtra::grid.arrange(
   datasets$cb %>% scater_show(color.by = "celltype", colors = colors),
   datasets$cb %>% scater_show(color.by = "Group", colors = colors),
@@ -2735,7 +2814,7 @@ gridExtra::grid.arrange(
 
 ##### Mouse model / Plate
 
-```{r, echo=FALSE}
+```{r, cache=TRUE}
 gridExtra::grid.arrange(
   datasets$cb %>% scater_show(color.by = "MouseModel", colors = colors),
   datasets$cb %>% scater_show(color.by = "Plate", colors = colors),
@@ -2747,7 +2826,7 @@ gridExtra::grid.arrange(
 
 ##### Subgroup / Cluster
 
-```{r, echo=FALSE}
+```{r, cache=TRUE}
 gridExtra::grid.arrange(
   datasets$dm %>% scater_show(color.by = "subgroup", colors = colors),
   datasets$dm %>% scater_show(color.by = "cluster", colors = colors),
@@ -3062,7 +3141,9 @@ datasets$dm %>% show_ab_2d(group.by = "subgroup", colors = colors)
 
 ### DE {.tabset}
 
-#### Compute
+#### Compute & prepare
+
+##### Compute DE
 
 ```{r, cache=TRUE}
 de <- list(
@@ -3083,6 +3164,82 @@ de <- list(
 )
 ```
 
+##### Heatmap of genesets
+
+```{r}
+show_heatmap_slides <- function(sce, de_table) {
+  genesets <- list(
+    list(name = "Chemokine activity", genes = go2symbols("^chemokine activity")),
+    
+    list(name = "Cytokine activity", genes = go2symbols("^cytokine activity")),
+    
+    list(name = "Neuron projection", genes = go2symbols("neuron projection")),
+    
+    list(name = "Cell adhesion", genes = go2symbols("cell adhesion")),
+    
+    list(name = "Immune response", genes = go2symbols("immune response")),
+    
+    list(name = "Inflammatory", genes = go2symbols("inflammatory")),
+    
+    list(name = "Fibroblast growth factor", genes = go2symbols("fibroblast growth factor")),
+    
+    list(name = "Smooth muscle", genes = go2symbols("smooth muscle")),
+    
+    list(name = "Cell communication", genes = go2symbols("cell communication")),
+    
+    list(name = "Chemotaxis", genes = go2symbols("chemotaxis")),
+    
+    list(name = "Amyloid", genes = go2symbols("amyloid")),
+    
+    list(name = "Insulin", genes = go2symbols("insulin")),
+    
+    list(name = "Wounding", genes = go2symbols("wounding")),
+    
+    list(name = "Actin filament", genes = go2symbols("actin filament")),
+    
+    list(name = "Apoptosis", genes = go2symbols("apoptosis")),
+    
+    goi$fib_mig,
+    goi$neuroinflammation,
+    goi$air,
+    goi$glycolysis,
+    list(name = "Most-DE genes", genes = de_table$symbol, n = 33)
+  )
+  
+  #genesets <- goi[c("glycolysis", "fib_mig")]  # DEBUG
+  
+  # default max number of genes to show
+  n <- 47
+  
+  genesets %>% lapply(function(geneset) {
+    geneset %>% 
+      with({
+        sub_de_table <- de_table %>% filter(symbol %in% genes)
+        
+        if (!(any(rownames(sce) %in% sub_de_table$symbol)))
+          return()
+        
+        show_de_heatmap(
+          sce,
+          sub_de_table, 
+          colors = colors, 
+          cluster_cols = FALSE,
+          n = n,
+          main = name
+        )
+      }) %>%
+      magrittr::use_series(gtable)
+  })
+}
+```
+
+```{r, dpi=72, out.extra='class="scrollable"', results='hide', out.width='20%', eval=FALSE}
+show_heatmap_slides(
+  sce_dummy %>% .[, order(.$subgroup)],
+  sce_dummy.de$table %>% filter(src == "edgeR")
+)
+```
+
 
 #### AB: Other/375_VLMC
 
@@ -3092,14 +3249,15 @@ de <- list(
 de$ab_other_vs_375$table %>% show_de_table()
 ```
 
-##### Heatmap of most DE genes (edgeR)
+##### Heatmaps of most-DE genes and other sets (edgeR)
 
-```{r}
-datasets$ab %>%
-  show_de_heatmap(
-    de$ab_other_vs_375$table %>% filter(src == "edgeR"),
-    colors = colors
-  )
+Click on the image to cycle through the sets.
+
+```{r, dpi=72, out.extra='class="scrollable"', results='hide'}
+show_heatmap_slides(
+  datasets$ab %>% .[, order(.$celltype)],
+  de$ab_other_vs_375$table %>% filter(src == "edgeR")
+)
 ```
 
 ##### LogCMP vs LFC from edgeR
@@ -3135,14 +3293,15 @@ de$ab_other_vs_375$table %>%
 de$bh_fb2_vs_fb1$table %>% show_de_table()
 ```
 
-##### Heatmap of most DE genes (edgeR)
+##### Heatmaps of most-DE genes and other sets (edgeR)
 
-```{r}
-datasets$bh %>%
-  show_de_heatmap(
-    de$bh_fb2_vs_fb1$table %>% filter(src == "edgeR"),
-    colors = colors
-  )
+Click on the image to cycle through the sets.
+
+```{r, dpi=72, out.extra='class="scrollable"', results='hide'}
+show_heatmap_slides(
+  datasets$bh %>% .[, order(.$celltype)],
+  de$bh_fb2_vs_fb1$table %>% filter(src == "edgeR")
+)
 ```
 
 ##### LogCMP vs LFC from edgeR:
@@ -3170,7 +3329,6 @@ de$bh_fb2_vs_fb1$table %>%
 ```
 
 
-
 #### CB: Other/VLMC3
 
 ##### Most-DE genes
@@ -3179,14 +3337,15 @@ de$bh_fb2_vs_fb1$table %>%
 de$cb_other_vs_vlmc3$table %>% show_de_table()
 ```
 
-##### Heatmap of most DE genes (edgeR)
+##### Heatmaps of most-DE genes and other sets (edgeR)
 
-```{r}
-datasets$cb %>%
-  show_de_heatmap(
-    de$cb_other_vs_vlmc3$table %>% filter(src == "edgeR"),
-    colors = colors
-  )
+Click on the image to cycle through the sets.
+
+```{r, dpi=72, out.extra='class="scrollable"', results='hide'}
+show_heatmap_slides(
+  datasets$cb %>% .[, order(.$celltype)],
+  de$cb_other_vs_vlmc3$table %>% filter(src == "edgeR")
+)
 ```
 
 ##### LogCMP vs LFC from edgeR:
@@ -3222,14 +3381,15 @@ de$cb_other_vs_vlmc3$table %>%
 de$cb_eae_vs_ctrl$table %>% show_de_table()
 ```
 
-##### Heatmap of most DE genes (edgeR)
+##### Heatmaps of most-DE genes and other sets (edgeR)
 
-```{r}
-datasets$cb %>%
-  show_de_heatmap(
-    de$cb_eae_vs_ctrl$table %>% filter(src == "edgeR"),
-    colors = colors
-  )
+Click on the image to cycle through the sets.
+
+```{r, dpi=72, out.extra='class="scrollable"', results='hide'}
+show_heatmap_slides(
+  datasets$cb %>% .[, .$celltype != "VLMC3"] %>% .[, order(.$Group)],
+  de$cb_eae_vs_ctrl$table %>% filter(src == "edgeR")
+)
 ```
 
 ##### LogCMP vs LFC from edgeR:
@@ -3265,9 +3425,11 @@ de$cb_eae_vs_ctrl$table %>%
 de$dm_eae_vs_hthy$table %>% show_de_table()
 ```
 
-##### Heatmap of most DE genes (edgeR)
+##### Heatmaps of most-DE genes and other sets (edgeR)
 
-```{r}
+Click on the image to cycle through the sets.
+
+```{r, dpi=72, out.extra='class="scrollable"', results='hide'}
 datasets$dm %>%
   {
     # Remove the `celltype` columns (same as `cluster`)
@@ -3275,10 +3437,8 @@ datasets$dm %>%
     # Order samples
     .[, order(.$subgroup)]
   } %>%
-  show_de_heatmap(
-    de$dm_eae_vs_hthy$table %>% filter(src == "edgeR"),
-    cluster_cols = FALSE,
-    colors = colors
+  show_heatmap_slides(
+    de$dm_eae_vs_hthy$table %>% filter(src == "edgeR")
   )
 ```
 
@@ -3309,8 +3469,6 @@ de$dm_eae_vs_hthy$table %>%
 
 
 ### GO {.tabset}
-
-
 
 #### Compute
 
