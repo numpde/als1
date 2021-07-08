@@ -658,8 +658,8 @@ make_sce <- function(counts, coldata, dealias = TRUE) {
   if (dealias) {
     # TODO: get a list of aliases
     gene_alias = data.frame(
-      old = c("1810011O10Rik"),
-      new = c("Tcim")
+      old = c("1810011O10Rik", "F830016B08Rik", "A730017C20Rik"),
+      new = c("Tcim", "Ifgga4", "Minar2")
     )
     
     # Check that the "old -> new" mapping is well-defined
@@ -3231,26 +3231,26 @@ de <- list(
 ```{r}
 show_heatmap_slides <- function(sce, de_table) {
   genesets <- list(
-    list(name = "Chemokine activity", genes = go2symbols("^chemokine activity")),
-    list(name = "Cytokine activity", genes = go2symbols("^cytokine activity")),
     list(name = "Neuron projection", genes = go2symbols("neuron projection")),
     list(name = "Cell adhesion", genes = go2symbols("cell adhesion")),
-    list(name = "Immune response", genes = go2symbols("immune response")),
-    list(name = "Inflammatory", genes = go2symbols("inflammatory")),
     list(name = "Fibroblast growth factor", genes = go2symbols("fibroblast growth factor")),
     list(name = "Smooth muscle", genes = go2symbols("smooth muscle")),
     list(name = "Cell communication", genes = go2symbols("cell communication")),
     list(name = "Chemotaxis", genes = go2symbols("chemotaxis")),
     list(name = "Amyloid", genes = go2symbols("amyloid")),
     list(name = "Insulin", genes = go2symbols("insulin")),
-    list(name = "Wounding", genes = go2symbols("wounding")),
     list(name = "Actin filament", genes = go2symbols("actin filament")),
     list(name = "Apoptosis", genes = go2symbols("apoptosis")),
     goi$fib_mig,
+    list(name = "Wounding", genes = go2symbols("wounding")),
+    list(name = "Inflammatory", genes = go2symbols("inflammatory")),
+    list(name = "Immune response", genes = go2symbols("immune response")),
     goi$neuroinflammation,
     goi$air,
     goi$glycolysis,
     goi$col,
+    list(name = "Cytokine activity", genes = go2symbols("^cytokine activity")),
+    list(name = "Chemokine activity", genes = go2symbols("^chemokine activity")),
     goi$eae_common_up,
     list(name = "Most-DE genes", genes = de_table$symbol, n = 33)
   )
