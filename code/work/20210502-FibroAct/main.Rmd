@@ -1,6 +1,6 @@
 ---
 title: "On fibroblast activation"
-author: "RA ([numpde](https://github.com/numpde/))"
+author: "RA"
 date: "`r format(Sys.time(), '%Y-%m-%d')`"
 output:
   html_document:
@@ -24,6 +24,10 @@ knitr::opts_chunk$set(fig.width = 10, fig.height = 8, dpi = 72)
 
 # https://stackoverflow.com/questions/63595786/rmarkdown-how-to-embed-an-3d-plot
 # options(rgl.useNULL = TRUE) # Suppress the separate window.
+```
+
+```{js, echo=FALSE}
+$(".main-container").css({'min-height': '2048px'})
 ```
 
 
@@ -615,7 +619,7 @@ take_rows <- function(df, rows = NULL) {
 
 ```{r}
 # For reading wide tables
-Sys.setenv("VROOM_CONNECTION_SIZE" = 2 ** 19)
+Sys.setenv("VROOM_CONNECTION_SIZE" = 2**19)
 
 from_tsv <- function(filename, sep = "\t") {
   filename %>%
@@ -640,8 +644,8 @@ to_tsv <- function(df, fn, sep = "\t") {
 # A small random sub-dataframe (intended for genes x samples)
 shample <- function(df) {
   df[
-    sample(rownames(df), min(nrow(.), 333)),
-    sample(colnames(df), min(ncol(.), 33))
+    sample(rownames(df), min(nrow(df), 333)),
+    sample(colnames(df), min(ncol(df), 33))
   ]
 }
 ```
@@ -650,40 +654,10 @@ shample <- function(df) {
 
 ```{r}
 # Constructs a `SingleCellExperiment` checking consistency of sample names
-make_sce <- function(counts, coldata, dealias = TRUE) {
+make_sce <- function(counts, coldata) {
   # Check that samples in counts = genes x samples
   # are ordered as in coldata = samples x metafields
   stopifnot(assertthat::are_equal(colnames(counts), rownames(coldata)))
-  
-  if (dealias) {
-    # TODO: get a list of aliases
-    gene_alias = data.frame(
-      old = c("1810011O10Rik", "F830016B08Rik", "A730017C20Rik"),
-      new = c("Tcim", "Ifgga4", "Minar2")
-    )
-    
-    # Check that the "old -> new" mapping is well-defined
-    stopifnot(!any(duplicated(gene_alias$old)))
-    
-    # Note: we are not checking whether rownames(counts) is unique
-    
-    new <- 
-      rownames(counts) %>%
-      data.frame(old = .) %>%
-      # For all joins, rows will be duplicated if one or more rows in x matches multiple rows in y
-      left_join(y = gene_alias, by = "old") %>%
-      # Coalesce
-      mutate(new = if_else(!is.na(new), new, old)) %>%
-      pull(new, old) %>%
-      # "'names(x)' must be NULL or a character vector with no attributes"
-      as.character()
-    
-    # Most gene names should be still the same
-    stopifnot(mean(new == rownames(counts)) > 0.9)
-    
-    counts %<>%
-      magrittr::set_rownames(new)
-  }
 
   SingleCellExperiment::SingleCellExperiment(
     assays = list(counts = counts), colData = coldata
@@ -782,6 +756,78 @@ c("Jun", "Junb", "Junc") %>%
   data.frame(symbol = .) %>%
   mutate(gene_id = symbol2geneid(symbol)) %>%
   kable()
+```
+
+#### Dealiasing
+
+```{r}
+dealias <- function(genes, species = "Mm") {
+  # `alias2SymbolTable` returns of vector of the same length as the vector of aliases.
+  # If an alias maps to more than one symbol, lowest Entrez ID number is returned.
+  # If an alias can't be mapped, then NA is returned.
+
+  genes %>%
+    limma::alias2SymbolTable(species = species) %>%
+    {
+      is.na(.) %>% {
+        if (any(.)) {
+          warning(paste(
+            "Dealiasing with `limma` genes resulted in", sum(.), "NAs, e.g. at:", 
+            paste(sample(genes[.], size = min(5, sum(.))), collapse = ", ")
+          ))
+        }
+      }
+      
+      # Keep old names instead of NA
+      . <- dplyr::coalesce(., genes)
+      
+      stopifnot(all(!is.na(.)))
+      stopifnot(mean((.) == genes) > 0.7)
+
+      (.)
+    }
+}
+```
+
+```{r, eval=FALSE, echo=FALSE}
+# Alternative approach
+#
+# if (dealias) {
+#   # TODO: get a list of aliases
+#   gene_alias <- data.frame(
+#     old = c("1810011O10Rik", "F830016B08Rik", "A730017C20Rik"),
+#     new = c("Tcim", "Ifgga4", "Minar2")
+#   )
+# 
+#   # Check that the "old -> new" mapping is well-defined
+#   stopifnot(!any(duplicated(gene_alias$old)))
+# 
+#   # Note: we are not checking whether rownames(counts) is unique
+# 
+#   new <-
+#     rownames(counts) %>%
+#     data.frame(old = .) %>%
+#     # For all joins, rows will be duplicated if one or more rows in x matches multiple rows in y
+#     left_join(y = gene_alias, by = "old") %>%
+#     # Coalesce
+#     mutate(new = if_else(!is.na(new), new, old)) %>%
+#     pull(new, old) %>%
+#     # "'names(x)' must be NULL or a character vector with no attributes"
+#     as.character()
+# 
+#   # Most gene names should be still the same
+#   stopifnot(mean(new == rownames(counts)) > 0.9)
+# 
+#   counts %<>%
+#     magrittr::set_rownames(new)
+# }
+```
+
+```{r}
+dealias_sce <- function(sce) {
+  rownames(sce) %<>% dealias()
+  sce
+}
 ```
 
 
@@ -1043,7 +1089,7 @@ goi <-
       name = "PVF",
       genes = c(
         # From 2021-Manberg-...-Lewandowski, p.643
-        "Spp1", "Col6a1", "Col1a1", "Mmp2", 
+        "Spp1", "Col6a1", "Col1a1", "Mmp2",
         # From 2018-Vanlandewijck-He-...-Betsholtz
         "Pdgfra", "Lum", "Dcn"
       )
@@ -1113,10 +1159,9 @@ goi <-
       name = "Interferon gamma signaling",
       genes = c("Ifngr1", "Ifngr2", "Jak1", "Jak2", "Ifng")
     ),
-    
     eae_common_up = list(
-      name = "Consistently up in EAE",
-      genes = c("Wif1", "Flrt2", "Tcim", "Ifi47", "Aqp1", "Npy1r", "Serpina3g", "Tbc1d7", "Mical2", "Kng1", "Plac8", "Rai14", "Cd74", "Adam12", "Tjp2", "Cd44", "H2-Aa", "Cldn11", "Ctxn1")
+      name = "Up in EAE in CB & Dm",
+      genes = c("Wif1", "Flrt2", "Scgb1a1", "Tcim", "Pcdh19", "Ifi47", "Aqp1", "Npy1r", "Serpina3g", "Ak1", "Kng1", "Plac8", "Rai14", "Nup50", "Cd74", "Adam12", "Tnfaip2", "Cd44", "Zfp608", "Cldn11", "Chst2") %>% unique()
     )
   )
 ```
@@ -2048,8 +2093,17 @@ show_de_volcano <- function(de_table) {
     labs(color = "Gene set") +
 
     # Label outliers
-    geom_text(aes(label = label), hjust = -0.3, position = position_jitter(h = 4), size = 3, color = "blue") +
-    facet_grid(. ~ src, scale = "free") +
+    #geom_text(aes(label = label), hjust = -0.3, position = position_jitter(h = 4), size = 3, color = "blue") +
+    ggrepel::geom_text_repel(
+      aes(label = label),
+      hjust = -0.3, size = 2, alpha = 1, show.legend = FALSE,
+      max.overlaps = Inf, 
+      point.size = NA,
+      color = "blue",
+      segment.alpha = 0.2
+    ) +
+    
+    facet_grid(. ~ src, scales = "free") +
     theme(legend.position = "bottom")
 }
 ```
@@ -2066,17 +2120,31 @@ sce_dummy.de$table %>% show_de_volcano()
 show_de_basecamp <- function(.) {
   (.) %>%
     mutate(goi_set = symbol2goiset(symbol)) %>%
+    
     group_by(goi_set) %>%
     arrange(lfc) %>%
     mutate(is_out = (lfc <= max(head(lfc, 5))) | (min(tail(lfc, 5)) <= lfc)) %>%
     mutate(is_out = is_out | (min(tail(sort(base), 5)) <= base)) %>%
     ungroup() %>%
+    
     mutate(label = ifelse(is_out, symbol, "")) %>%
+    
     ggplot(aes(x = lfc, y = base)) +
+    
     geom_point(data = (.), alpha = 0.5, size = 1, color = "grey") +
-    geom_point(color = "black", size = 0.5) +
+    geom_point(color = "black", size = 0.5, alpha = 0.3) +
     scale_y_log10() +
-    geom_text(aes(label = label), hjust = -0.3, position = position_jitter(h = 0.01), size = 2, color = "blue") +
+    
+    
+    # geom_text(aes(label = label), hjust = -0.3, position = position_jitter(h = 0.01), size = 2, color = "blue") +
+    ggrepel::geom_text_repel(
+      aes(label = label),
+      hjust = -0.3, size = 2, show.legend = FALSE,
+      max.overlaps = Inf, point.size = NA,
+      segment.alpha = 0.2,
+      color = "blue"
+    ) +
+
     facet_wrap(~goi_set, scale = "free_y") +
 
     # Note: put labs(x = "..") outside
@@ -2093,6 +2161,7 @@ show_de_basecamp <- function(.) {
 
 ```{r, dpi=36}
 sce_dummy.de$table %>%
+  filter(src == "edgeR") %>%
   show_de_basecamp() +
   labs(x = "Condition1 <-- LFC --> Condition2")
 ```
@@ -2118,8 +2187,17 @@ show_de_cmp_lfc <- function(table) {
       ggplot((.) %>% filter(sig != ""), aes(x = lfc.x, y = lfc.y)) +
         geom_point(data = (.) %>% filter(sig == ""), stroke = 0, alpha = 0.2) +
         geom_point(aes(color = sig)) +
-        labs(x = "LFC by DESeq2", y = "LFC by edgeR", color = "Top %1 signif.") +
-        geom_text(aes(label = label, color = sig), hjust = -0.3, position = position_jitter(h = 0.05), size = 3, alpha = 0.8, show.legend = FALSE) +
+        labs(x = "LFC by DESeq2", y = "LFC by edgeR", color = "Top 1% signif.") +
+        
+        #geom_text(aes(label = label, color = sig), hjust = -0.3, position = position_jitter(h = 0.05), size = 3, alpha = 0.8, show.legend = FALSE) +
+        ggrepel::geom_text_repel(
+          aes(label = label, color = sig),
+          hjust = -0.3, size = 2, alpha = 0.8, show.legend = FALSE,
+          max.overlaps = 20, 
+          point.size = NA,
+          segment.alpha = 0.2
+        ) +
+        
         geom_abline(slope = 1, intercept = 0, linetype = "dashed")
     }
 }
@@ -2816,10 +2894,17 @@ load_dataset$dm <- function(max.size = 9999) {
 
 ### Load all
 
-#### Read from disk
+##### Read from disk
 
 ```{r}
 datasets <- load_dataset %>% lapply(\(loader) memo(loader)(max.size = 777))
+# Note: Don't cache but memoize here
+```
+
+##### Dealias gene symbols
+
+```{r}
+datasets %<>% lapply(dealias_sce)
 ```
 
 ##### Attach reduced dimensions
@@ -2973,14 +3058,19 @@ datasets$cb %>% show_dm_heatmap(colors = colors, cluster_cols = TRUE)
 
 ```{r, cache=TRUE}
 cco <- list(
-  ab = datasets$ab %>%
-    cell_cycle(batch.by = "celltype"),
-  bh = datasets$bh %>%
-    cell_cycle(batch.by = "celltype"),
-  cb = datasets$cb %>%
-    cell_cycle(batch.by = "celltype"),
-  dm = datasets$dm %>%
-    `[`(, (.)$subgroup %in% c("healthy1", "healthy2")) %>%
+  ab = datasets$ab %>% cell_cycle(batch.by = "celltype"),
+  
+  bh = datasets$bh %>% cell_cycle(batch.by = "celltype"),
+  
+  cb = datasets$cb %>% cell_cycle(batch.by = "celltype"),
+  
+  dm_h12 = datasets$dm %>%
+    .[, .$subgroup %in% c("healthy1", "healthy2")] %>%
+    cell_cycle(batch.by = "subgroup"),
+  
+  dm_h12_0 = datasets$dm %>%
+    .[, .$subgroup %in% c("healthy1", "healthy2")] %>%
+    .[, .$cluster %in% c(0)] %>%
     cell_cycle(batch.by = "subgroup")
 )
 ```
@@ -2998,15 +3088,23 @@ cco$bh %>% cell_cycle_plot2d(colors = colors)
 ```
 
 #### Castelo-Branco
-
+  
 ```{r}
 cco$cb %>% cell_cycle_plot2d(colors = colors)
 ```
 
-#### Daneman ("healthy")
+#### Daneman 
+
+##### Healthy 1+2
 
 ```{r}
-cco$dm %>% cell_cycle_plot2d(colors = colors)
+cco$dm_h12 %>% cell_cycle_plot2d(colors = colors)
+```
+
+##### Healthy 1+2, cluster 0
+
+```{r}
+cco$dm_h12_0 %>% cell_cycle_plot2d(colors = colors)
 ```
 
 
@@ -3101,7 +3199,7 @@ show_ab_density <- function(sce, group.by = "celltype", colors = ramp(sce@colDat
           labs(y = "Fraction of cells (i.e., density)") +
           labs(color = group.by) +
           scale_color_manual(values = colors, breaks = gglast(colour)) +
-          #ggtitle(paste0(A, " vs ", B)) +
+          # ggtitle(paste0(A, " vs ", B)) +
           geom_density(size = 3)
       }
     }))
@@ -3140,7 +3238,7 @@ show_ab_2d <- function(sce, group.by = "celltype", colors = ramp(sce@colData[[gr
           labs(x = A, y = B, color = group.by, size = "Library size") +
           scale_color_manual(values = colors, breaks = gglast(colour)) +
           geom_point(alpha = 0.6) +
-          #ggtitle(paste0(A, " vs ", B)) +
+          # ggtitle(paste0(A, " vs ", B)) +
           guides(shape = FALSE) +
           geom_density_2d(size = 0.3, alpha = 0.5) +
           guides(color = guide_legend(override.aes = list(alpha = 1)))
@@ -3203,7 +3301,7 @@ datasets$dm %>% show_ab_2d(group.by = "subgroup", colors = colors)
 
 ### DE {.tabset}
 
-#### Compute & prepare
+#### Prep
 
 ##### Compute DE
 
@@ -3283,7 +3381,7 @@ show_heatmap_slides <- function(sce, de_table) {
 }
 ```
 
-```{r, dpi=72, out.extra='class="scrollable"', results='hide', out.width='20%', eval=FALSE}
+```{r, dpi=72, out.extra='class="scrollable"', results='hide', out.width='20%', eval=FALSE, include=FALSE}
 show_heatmap_slides(
   sce_dummy %>% .[, order(.$subgroup)],
   sce_dummy.de$table %>% filter(src == "edgeR")
@@ -3355,7 +3453,7 @@ show_heatmap_slides(
 )
 ```
 
-##### LogCMP vs LFC from edgeR:
+##### LogCMP vs LFC from edgeR
 
 ```{r}
 de$bh_fb2_vs_fb1$table %>%
@@ -3399,7 +3497,7 @@ show_heatmap_slides(
 )
 ```
 
-##### LogCMP vs LFC from edgeR:
+##### LogCMP vs LFC from edgeR
 
 ```{r}
 de$cb_other_vs_vlmc3$table %>%
@@ -3424,7 +3522,7 @@ de$cb_other_vs_vlmc3$table %>%
 ```
 
 
-#### CB (reduced): EAE/Ctrl
+#### CB': EAE/Ctrl
 
 ##### Most-DE genes
 
@@ -3443,7 +3541,7 @@ show_heatmap_slides(
 )
 ```
 
-##### LogCMP vs LFC from edgeR:
+##### LogCMP vs LFC from edgeR
 
 ```{r}
 de$cb_eae_vs_ctrl$table %>%
@@ -3493,7 +3591,7 @@ datasets$dm %>%
   )
 ```
 
-##### LogCMP vs LFC from edgeR:
+##### LogCMP vs LFC from edgeR
 
 ```{r}
 de$dm_eae_vs_hthy$table %>%
@@ -3554,7 +3652,7 @@ go$n33$bh_fb2_vs_fb1 %>% show_go_table()
 go$n33$cb_other_vs_vlmc3 %>% show_go_table()
 ```
 
-#### CB (reduced): EAE/Ctrl
+#### CB': EAE/Ctrl
 
 ```{r}
 go$n33$cb_eae_vs_ctrl %>% show_go_table()
@@ -3912,6 +4010,7 @@ simultaneously in several datasets.
 ```{r}
 make_common_de_table <- function(de_tables, slicer = slice_max) {
   de_tables %>%
+    
     lapply(function(t) {
       t %>%
         group_by(name, src) %>%
@@ -3920,20 +4019,20 @@ make_common_de_table <- function(de_tables, slicer = slice_max) {
         ungroup() %>%
         filter(src == "edgeR")
     }) %>%
+    
     dual(rbind) %>%
     as.data.frame() %>%
-    {
-      # print(head(.))
-      .
-    } %>%
+    
     select(symbol, norm.lfc, name) %>%
     stats::reshape(direction = "wide", idvar = "symbol", timevar = "name") %>%
     # Commonly-DE first
     arrange(desc(rowSums(!is.na(across(where(is.numeric)))))) %>%
+    
     # Signature of NAs
     rowwise() %>%
     mutate(signature = paste(across(where(is.numeric), ~ ifelse(is.na(.x), "N", "Y")), collapse = "")) %>%
     ungroup() %>%
+    
     # Role: TF, Rec, Lig, etc
     mutate(role = symbol2role(symbol)) %>%
     # Reset rownames
@@ -3949,6 +4048,42 @@ make_common_de_table <- function(de_tables, slicer = slice_max) {
 de_tables %>% make_common_de_table(slicer = slice_max)
 ```
 
+##### Up/down in EAE
+
+Top genes that are DE (edgeR) in EAE.
+
+```{r}
+list(
+  cb = de$cb_eae_vs_ctrl$table,
+  dm = de$dm_eae_vs_hthy$table
+) %>%
+  
+  lapply(. %>% filter(src == "edgeR")) %>%
+  lapply(. %>% filter((lfc < quantile(lfc, 0.03)) | (quantile(lfc, 0.97) < lfc))) %>%
+  
+  with(merge(
+    cb %>% select(symbol, lfc.cb = lfc),
+    dm %>% select(symbol, lfc.dm = lfc),
+    by = "symbol"
+  )) %>%
+  
+  ggplot(aes(x = lfc.cb, y = lfc.dm)) + 
+  
+  labs(x = "Healthy <- LFC Daneman -> EAE") +
+  labs(y = "Healthy <- LFC Castelo-Branco -> EAE") +
+  
+  geom_hline(yintercept = 0, alpha = 0.2) +
+  geom_vline(xintercept = 0, alpha = 0.2) +
+  
+  geom_point(size = 1, alpha = 0.2) +
+  
+  ggrepel::geom_text_repel(
+    aes(label = symbol),
+    hjust = 1.1, size = 4, show.legend = FALSE,
+    max.overlaps = Inf, point.size = NA,
+    segment.alpha = 0.2
+  ) 
+```
 
 
 ### Agg. heatmaps {.tabset}
@@ -4017,9 +4152,11 @@ show_stack <- function(ds) {
 
   ds %>%
     mutate(role = if_else(role == "", "Unknown", role)) %>%
+    
     group_by(subdataset) %>%
     mutate(expression = 100 * expression / max(expression)) %>%
     ungroup() %>%
+    
     mutate(
       symbol = if_else(symbol %in% interesting, glue("<span style='color:red;'>{symbol}</span>"), symbol)
     ) %>%
@@ -4061,7 +4198,10 @@ show_stack <- function(ds) {
 
 #### Daneman clusters
 
-```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide', eval=TRUE, out.extra='class="zoomable"'}
+Click on the plot to scroll through the clusters
+(shift-click to cycle back).
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE, results='hide', eval=TRUE, out.extra='class="zoomable scrollable"'}
 (0:7) %>%
   lapply(function(i) {
     datasets$grouped %>%
@@ -4418,17 +4558,6 @@ de_tables_vs_si7 %>%
 
 
 
-### (TODO)
-
-
-####
-
-```{r}
-# Genes DE in EAE but not in AB dataset
-```
-
-
-
 
 ### ---
 
@@ -4448,60 +4577,6 @@ culprits() %>%
 
 
 
-
-## Conclusions
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
-
--
 
 
 
