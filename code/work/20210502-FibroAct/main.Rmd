@@ -1058,6 +1058,9 @@ gene.summary %>%
 
 ##### Define gene sets
 
+The following defines the core set of genes of interest.
+More is added below from the "Daneman clusters".
+
 ```{r}
 goi <-
   list(
@@ -1067,7 +1070,7 @@ goi <-
         # "Early response" transcription factors: Fos, Fosb, Junb
         # From 2018-Vanlandewijck-He-...-Betsholtz:
         # "A molecular atlas of cell types and zonation in the brain vasculature"
-        c("Fos", "Fosb", "Junb", "Egr1"), # Jun is below
+        c("Fos", "Fosb", "Junb", "Egr1", "Jun"),
 
         # Wikipathways Neuroinflammation:
         # https://www.wikipathways.org/instance/WP4919_r111814
@@ -1136,6 +1139,7 @@ goi <-
         c("Aco1", "Aco2", "Adsl", "Afg1l", "Atp5f1d", "Bloc1s1", "Cat", "Cox10", "Cox4i1", "Cox4i2", "Cox5a", "Cox5b", "Cox6a1", "Cox6a2", "Cox7c", "Cs", "Csl", "Cycs", "Cyct", "Dhtkd1", "Dlat", "Dlst", "Fh", "Fxn", "Idh1", "Idh2", "Idh3a", "Idh3b", "Idh3g", "Ireb2", "Mdh1", "Mdh1b", "Mdh2", "Mtco1", "Mtfr1", "Mtfr1l", "Mtfr2", "Mtnd1", "Mtnd4", "Mup1", "Mup11", "Mup2", "Mup3", "Mup4", "Mup5", "Mup6", "Ndufs4", "Ndufs7", "Ndufs8", "Ogdh", "Ogdhl", "Oxa1l", "Pank2", "Pdha1", "Pdha2", "Pdhb", "Proca1", "Q8BPC6", "Sdha", "Sdhaf2", "Sdhb", "Sdhc", "Sdhd", "Sirt3", "Sucla2", "Suclg1", "Suclg2", "Ucn", "Uqcr10", "Uqcrb", "Uqcrh")
       )
     ),
+    
     fib_mig = list(
       name = "Reg. fib. mig.",
       genes = c(
@@ -1144,6 +1148,7 @@ goi <-
         c("Acta2", "Actr3", "Adipor2", "Ager", "Akap12", "Akt1", "Appl1", "Appl2", "Arhgap4", "Bag4", "Braf", "Cln3", "Coro1c", "Cygb", "Ddr2", "Dmtn", "Fer", "Fgf2", "Fgfr1", "Gna12", "Has1", "Hyal2", "Itgb1", "Itgb1bp1", "Itgb3", "MACIR", "Mmp1a", "Mta2", "Pak1", "Pak3", "Prkce", "Prr5l", "Ptk2", "Rac1", "Rcc2", "Rffl", "Sdc4", "Slc8a1", "Tgfb1", "Thbs1", "Tsc2", "Uts2", "Wdpcp")
       )
     ),
+    
     glycolysis = list(
       name = "Anaerobic glycolysis",
       genes = c(
@@ -1159,9 +1164,18 @@ goi <-
       name = "Interferon gamma signaling",
       genes = c("Ifngr1", "Ifngr2", "Jak1", "Jak2", "Ifng")
     ),
+    
+    # Genes that are upregulated in EAE simultaneously in CB and Dm
+    # (collected 2021-07-08)
     eae_common_up = list(
       name = "Up in EAE in CB & Dm",
-      genes = c("Wif1", "Flrt2", "Scgb1a1", "Tcim", "Pcdh19", "Ifi47", "Aqp1", "Npy1r", "Serpina3g", "Ak1", "Kng1", "Plac8", "Rai14", "Nup50", "Cd74", "Adam12", "Tnfaip2", "Cd44", "Zfp608", "Cldn11", "Chst2") %>% unique()
+      genes = c("Wif1", "Flrt2", "Scgb1a1", "Tcim", "Pcdh19", "Ifi47", "Aqp1", "Npy1r", "Serpina3g", "Ak1", "Kng1", "Plac8", "Rai14", "Nup50", "Cd74", "Adam12", "Tnfaip2", "Cd44", "Zfp608", "Cldn11", "Chst2")
+    ),
+    
+    # 2020-Muhl-...-Betsholtz (Single-cell analysis uncovers fibroblast heterogeneity and criteria for fibroblast and mural cell identification and discrimination)
+    FB45 = list(
+      name = "FB45 markers from Muhl et al., 2020",
+      genes = c("Nav1", "Dpt", "Hsd11b1", "Cd34", "Celf2", "Entpd2", "Col5a1", "Gsn", "Slc43a3", "S100a16", "S100a10", "Olfml3", "Lpar1", "Htra3", "Ugdh", "Pdgfra", "ENSMUSG00000107314", "Medag", "Col1a2", "Fbln2", "Mfap5", "Mgst1", "Lsp1", "Mmp2", "Dpep1", "Loxl1", "Pcolce2", "Bicc1", "Dcn", "Lum", "Gfpt2", "Adamts2", "Mfap4", "Serpinf1", "Col1a1", "Abca8a", "Rnase4", "Scara5", "Ly6a", "Fbln1", "Igfbp6", "Heg1", "Ccdc80", "Pi16", "C3")
     )
   )
 ```
@@ -2185,8 +2199,8 @@ show_de_cmp_lfc <- function(table) {
     mutate(label = if_else(sig.x | sig.y, symbol, "")) %>%
     {
       ggplot((.) %>% filter(sig != ""), aes(x = lfc.x, y = lfc.y)) +
-        geom_point(data = (.) %>% filter(sig == ""), stroke = 0, alpha = 0.2) +
-        geom_point(aes(color = sig)) +
+        geom_point(data = (.) %>% filter(sig == ""), stroke = 0, alpha = 0.15, size = 1) +
+        geom_point(aes(color = sig), alpha = 0.5, size = 1) +
         labs(x = "LFC by DESeq2", y = "LFC by edgeR", color = "Top 1% signif.") +
         
         #geom_text(aes(label = label, color = sig), hjust = -0.3, position = position_jitter(h = 0.05), size = 3, alpha = 0.8, show.legend = FALSE) +
@@ -3350,6 +3364,7 @@ show_heatmap_slides <- function(sce, de_table) {
     list(name = "Cytokine activity", genes = go2symbols("^cytokine activity")),
     list(name = "Chemokine activity", genes = go2symbols("^chemokine activity")),
     goi$eae_common_up,
+    goi$FB45,
     list(name = "Most-DE genes", genes = de_table$symbol, n = 33)
   )
 
