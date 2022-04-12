@@ -1,0 +1,265 @@
+---
+title: "Apoe in Tam & al."
+author: "RA ([numpde](https://github.com/numpde/))"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+editor_options:
+ chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Introduction
+
+
+[Tam et al, 2019](https://doi.org/10.1016/j.celrep.2019.09.066)
+
+## Preliminaries {.tabset .tabset-fade .tabset-pills}
+
+### Setup
+
+```{r}
+suppressPackageStartupMessages({
+  # install.packages("kableExtra")
+  requireNamespace("kableExtra")
+
+  # install.packages("dplyr")
+  library(dplyr)
+  # install.packages("ggplot2")
+  library(ggplot2)
+
+  # BiocManager::install("DESeq2")
+  requireNamespace("DESeq2")
+
+  # install.packages("pheatmap")
+  requireNamespace("pheatmap")
+  # install.packages("stringr")
+  requireNamespace("stringr")
+  # install.packages("reshape2")
+  requireNamespace("reshape2")
+  # install.packages("pbapply")
+  requireNamespace("pbapply")
+  # install.packages("pathlibr")
+  requireNamespace("pathlibr")
+  # install.packages("stringdist")
+  requireNamespace("stringdist")
+
+  # avoid importing `exprs` that leads to clashes
+  requireNamespace("rlang")
+})
+```
+
+```{r}
+`%<>%` <- magrittr::`%<>%` 
+```
+
+### SessionInfo
+
+```{r}
+sessionInfo()
+```
+
+
+### Paths
+
+```{r}
+BASEPATH <- pathlibr::Path$new(".")
+stopifnot("main.Rmd" %in% names(BASEPATH$dir))
+```
+
+```{r}
+
+path_to <- (function(.) Sys.glob(BASEPATH$join("../..")$join(.)$show))
+```
+
+### Plotting
+
+```{r}
+kable <- function(.) {
+  kableExtra::kbl(., align = "c") %>%
+    kableExtra::kable_paper("hover", full_width = F)
+}
+```
+
+
+## Datasets
+
+### Tam et al, 2019
+
+[ExpressionSet](https://bioconductor.riken.jp/packages/3.1/bioc/vignettes/Biobase/inst/doc/ExpressionSetIntroduction.pdf)
+
+```{r}
+eset_tam <- Biobase::ExpressionSet(
+  assayData = (
+    path_to("*/*Tam*/*/GSE124439_data*") %>%
+      read.csv(sep = "\t", check.names = FALSE) %>%
+      tibble::column_to_rownames("gene/TE") %>%
+      as.matrix()
+  ),
+  phenoData = Biobase::AnnotatedDataFrame(
+    data = (
+      cbind(
+        path_to("*/*Tam*/*/GSE124439_meta*") %>%
+          read.csv(sep = "\t") %>%
+          tibble::column_to_rownames("hra"),
+        path_to("*/*Tam*/*/*/S1A_NYGC_clinical.csv*") %>%
+          read.csv(sep = "\t", comment.char = "#") %>%
+          tibble::column_to_rownames("hra") %>%
+          # Drop duplicate columns:
+          select(-sample_group, -tissue)
+      )
+    )
+  )
+)
+```
+
+```{r}
+eset_tam@phenoData@data$sample_group %<>% factor
+```
+
+Sample groups are:
+`r paste(levels(eset_tam@phenoData@data$sample_group), collapse = ", ")`.
+
+
+## Analysis
+
+### [DESeq2](https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html)
+
+```{r}
+dds_tam <- DESeq2::DESeqDataSetFromMatrix(
+  countData = eset_tam@assayData$exprs,
+  colData = eset_tam@phenoData@data,
+  design = ~sample_group
+)
+```
+
+Only keep two conditions for DE analysis.
+
+```{r}
+dds_tam <-
+  dds_tam[, dds_tam$sample_group %in% c("ALS", "non_neuro")]
+```
+
+DESeq [note](https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#factorlevels) on factor levels.
+
+```{r}
+dds_tam$sample_group %<>%
+  relevel(ref = "non_neuro") %>%
+  droplevels()
+```
+
+Attach the DESeq normalization
+and
+get normalized counts.
+
+```{r}
+dds_tam %<>%
+  DESeq2::estimateSizeFactors()
+```
+
+```{r}
+dds_tam.norm_counts <-
+  dds_tam %>%
+  DESeq2::counts(normalized = TRUE)
+```
+
+DESeq
+
+```{r}
+dds_tam <-
+  DESeq2::DESeq(dds_tam)
+```
+
+```{r}
+de_results <-
+  DESeq2::results(dds_tam, alpha = 0.05) %>%
+  as.data.frame()
+
+de_results %>%
+  slice_min(padj, n = 10, with_ties = TRUE) %>%
+  kable()
+```
+
+`plotCounts` shows
+normalized counts plus a pseudocount of 0.5.
+
+```{r}
+DESeq2::plotCounts(dds_tam, gene = "ANKRD20A9P", intgroup = "sample_group")
+```
+
+
+```{r}
+DESeq2::plotCounts(dds_tam, gene = "MAPK8IP1P2", intgroup = "sample_group")
+```
+
+
+```{r}
+DESeq2::plotCounts(dds_tam, gene = "ARAP3", intgroup = "sample_group")
+```
+
+Is MAPK8IP1P2 consistent per-subject?
+
+```{r}
+dds_tam@colData$subject_id
+```
+
+
+
+The following are the most predictive marker genes
+from each category
+proposed by 
+[Tam et al, 2019](https://www.sciencedirect.com/science/article/pii/S221112471931263X#mmc4),
+extracted from their
+[Table S2](https://ars.els-cdn.com/content/image/1-s2.0-S221112471931263X-mmc4.xlsx).
+
+```{r}
+tam_markers <- c(
+  # ALS-Ox
+  c("CTXN3", "LINC00507", "CALB1", "GPR22", "TMEM155", "MAL2", "PCP4"),
+  # ALS-Glia
+  c("NKX6-2", "SERPINA3", "KLK6", "SLC5A11", "ITGA2", "AQP1", "TNC"),
+  # ALS-TE
+  c("AP1G2", "CORO6", "FAM153B", "NPIPB3", "FAM153A", "SRRM3", "LINC00599")
+)
+```
+
+For a suitably transformed expression table,
+those genes 
+indeed cluster
+into the same three sets.
+
+```{r}
+dds_tam.norm_counts[c(tam_markers, "MAPK8IP1P2"), ] %>%
+  {
+    log2(. + 0.5)
+  } %>%
+  # Standardize rows
+  t() %>%
+  scale() %>%
+  t() %>%
+  pheatmap::pheatmap(
+    annotation_col = (
+      dds_tam@colData %>% as.data.frame() %>% select(sample_group, ALS_subtype)
+    )
+  )
+```
+
+
+***
+
+
+```{r include=FALSE}
+knitr::knit_exit()
+```
+
+
+
+## Notes
+
+"echo = FALSE": prevent printing of the R code that generated the plot.
