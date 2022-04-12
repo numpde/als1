@@ -146,6 +146,12 @@ dds_tam <-
   dds_tam[, dds_tam$sample_group %in% c("ALS", "non_neuro")]
 ```
 
+There are now
+`r dds_tam@colData$subject_id %>% unique %>% length`
+samples from
+`r dds_tam@colData$subject_id %>% length`
+subjects.
+
 DESeq [note](https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#factorlevels) on factor levels.
 
 ```{r}
@@ -177,6 +183,12 @@ dds_tam <-
 ```
 
 ```{r}
+dds_tam@colData$ALS_subtype %<>% 
+  as.factor() %>%
+  addNA()
+```
+
+```{r}
 de_results <-
   DESeq2::results(dds_tam, alpha = 0.05) %>%
   as.data.frame()
@@ -190,24 +202,25 @@ de_results %>%
 normalized counts plus a pseudocount of 0.5.
 
 ```{r}
-DESeq2::plotCounts(dds_tam, gene = "ANKRD20A9P", intgroup = "sample_group")
+dds_tam %>% 
+  DESeq2::plotCounts(gene = "ANKRD20A9P", intgroup = "ALS_subtype")
 ```
-
 
 ```{r}
-DESeq2::plotCounts(dds_tam, gene = "MAPK8IP1P2", intgroup = "sample_group")
+dds_tam %>% 
+  DESeq2::plotCounts(gene = "MAPK8IP1P2", intgroup = "ALS_subtype")
 ```
-
 
 ```{r}
-DESeq2::plotCounts(dds_tam, gene = "ARAP3", intgroup = "sample_group")
+dds_tam %>% 
+  DESeq2::plotCounts(gene = "ARAP3", intgroup = "ALS_subtype")
 ```
-
-Is MAPK8IP1P2 consistent per-subject?
 
 ```{r}
-dds_tam@colData$subject_id
+dds_tam %>% 
+  DESeq2::plotCounts(gene = "APOE", intgroup = "ALS_subtype")
 ```
+
 
 
 
@@ -233,9 +246,10 @@ For a suitably transformed expression table,
 those genes 
 indeed cluster
 into the same three sets.
+In particular, APOE clusters with the ALS-Glia subtype.
 
 ```{r}
-dds_tam.norm_counts[c(tam_markers, "MAPK8IP1P2"), ] %>%
+dds_tam.norm_counts[c(tam_markers, "MAPK8IP1P2", "ANKRD20A9P", "APOE"), ] %>%
   {
     log2(. + 0.5)
   } %>%
