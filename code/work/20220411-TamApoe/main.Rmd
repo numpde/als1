@@ -248,7 +248,7 @@ indeed cluster
 into the same three sets.
 In particular, APOE clusters with the ALS-Glia subtype.
 
-```{r}
+```{r, out.width = "100%"}
 dds_tam.norm_counts[c(tam_markers, "MAPK8IP1P2", "ANKRD20A9P", "APOE"), ] %>%
   {
     log2(. + 0.5)
@@ -257,7 +257,12 @@ dds_tam.norm_counts[c(tam_markers, "MAPK8IP1P2", "ANKRD20A9P", "APOE"), ] %>%
   t() %>%
   scale() %>%
   t() %>%
+  {
+    (.)[, order(dds_tam@colData$ALS_subtype)]
+  } %>%
   pheatmap::pheatmap(
+    labels_col = "",
+    cluster_cols = FALSE,
     annotation_col = (
       dds_tam@colData %>% as.data.frame() %>% select(sample_group, ALS_subtype)
     )
