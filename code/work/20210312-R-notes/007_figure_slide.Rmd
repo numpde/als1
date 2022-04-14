@@ -10,15 +10,18 @@ editor_options:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_chunk$set(out.width = "100%")
+knitr::opts_chunk$set(out.width = "40%", dpi = 36)
 ```
 
+```{js, echo=FALSE}
+$(".main-container").css({'min-height': '2048px'})
+```
 
 ```{js, out.extra='class="scrollable_js"'}
 $(document).ready(
   function() {
     $("img.zoomable").on("click", function(evt) {
-      if (evt.originalEvent.shiftKey) {
+      if (!evt.originalEvent.shiftKey && evt.originalEvent.altKey) {
         var el = $(this).clone();
         el.attr("width", "2048px");
         window.open().document.write(el.wrap('<p>').parent().html());
@@ -34,17 +37,28 @@ $(document).ready(
       'position': 'absolute', 'top': 0, 'left': 0, 'z-index': 100000,
     });
     
-    $("img.scrollable").parent().css({'position': 'relative'});
-    $("img.scrollable").parent().find('img:first').css({'position': 'relative'});
+    var parent = $("img.scrollable").parent();
+    
+    parent.css({'position': 'relative'});
+    parent.find('img:first').css({'position': 'relative'});
+    
+    // associate a 'history' stack with each parent
+    parent.each(function(i, el) { $(el).data("stack", new Array()); })
     
     $("img.scrollable").on("click", function(evt) {
-      if (!evt.originalEvent.altKey && !evt.originalEvent.shiftKey) {
-        $(this).css({'z-index': parseInt($(this).css('z-index'), 10) - 1});
-        evt.stopPropagation();
-        return false;
-      };
+      if (evt.originalEvent.altKey) return true;
       
-      return true;
+      if (!evt.originalEvent.shiftKey) {
+        var last = $(this);
+        last.parent().data("stack").push(last);
+        if (last) last.css({'z-index': parseInt(last.css('z-index'), 10) - 1});
+      } else {
+        var last = $(this).parent().data("stack").pop();
+        if (last) last.css({'z-index': parseInt(last.css('z-index'), 10) + 1});
+      }
+      
+      evt.stopPropagation();
+      return false;
     });
   }
 );
@@ -62,12 +76,13 @@ suppressPackageStartupMessages({
 figures <- function() {
   list(
     x = randu %>% ggplot(aes(x = x, y = y)) + geom_point() + ggtitle("Zoomable 1"),
-    y = randu %>% ggplot(aes(x = x, y = z)) + geom_point() + ggtitle("Zoomable 2")
+    y = randu %>% ggplot(aes(x = x, y = z)) + geom_point() + ggtitle("Zoomable 2"),
+    z = randu %>% ggplot(aes(x = y, y = z)) + geom_point() + ggtitle("Zoomable 3")
   )
 }
 ```
 
-```{r, out.extra='id="myfig" class="scrollable zoomable"', dpi=36, out.width='20%', results='hide'}
+```{r, out.extra='id="myfig" class="scrollable zoomable"', results='hide'}
 figures()
 ```
 
@@ -76,7 +91,7 @@ figures()
 ```
 
 
-```{r, out.extra='id="myfig" class="scrollable"', out.width='20%', results='hide', dpi=36}
+```{r, out.extra='id="myfig" class="scrollable"', results='hide'}
 figures()
 ```
 
@@ -84,3 +99,17 @@ figures()
 # Intermediate 2
 ```
 
+```{r, out.extra='id="myfig" class="scrollable"', results='hide'}
+requireNamespace("pheatmap")
+list(A = 1:5, B = 1:9) %>%
+  lapply(function(ii) {
+    pheatmap::pheatmap(randu[ii, ], cluster_rows = F, cluster_cols = F) %>%
+      magrittr::use_series(gtable)
+  })
+```
+
+## 
+
+```{html}
+hello
+```

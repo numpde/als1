@@ -186,6 +186,9 @@ dds_tam <-
 dds_tam@colData$ALS_subtype %<>% 
   as.factor() %>%
   addNA()
+
+dds_tam@colData$gender %<>% 
+  as.factor()
 ```
 
 ```{r}
@@ -219,6 +222,11 @@ dds_tam %>%
 ```{r}
 dds_tam %>% 
   DESeq2::plotCounts(gene = "APOE", intgroup = "ALS_subtype")
+```
+
+```{r}
+dds_tam %>% 
+  DESeq2::plotCounts(gene = "APOE", intgroup = "gender")
 ```
 
 

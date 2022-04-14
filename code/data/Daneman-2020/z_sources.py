@@ -5,13 +5,11 @@ Prepare the scRNA-seq dataset from:
 
 CNS fibroblasts form a fibrotic scar in response to immune cell infiltration.
 Dorrier CE, Aran D, Haenelt EA et al.
-Nat Neurosci 24, 234–244 (2021).
+Nat Neurosci 24, 234--244 (2021).
 https://doi.org/10.1038/s41593-020-00770-9
 
 GSE:
 https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE135186
-
-TODO: orientation
 """
 
 from bugs import *

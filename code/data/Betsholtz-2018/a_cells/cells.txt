@@ -1,6 +1,6 @@
 Mural6	377
-Mural3	369
 Mural4	369
+Mural3	369
 Mural5	369
 EC6	364
 EC5	361
