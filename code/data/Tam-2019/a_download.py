@@ -24,6 +24,10 @@ from tcga.utils import download, unlist1
 from pathlib import Path
 from contextlib import redirect_stderr, redirect_stdout
 
+import pandas as pd
+import tarfile
+import xml.etree.ElementTree as ET
+
 datapath = Path(__file__).with_suffix('')
 download = download.to(abs_path=(datapath / "cache"))
 
@@ -35,20 +39,23 @@ URLS = {
 
     # 'GSE124439_soft': "ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE124nnn/GSE124439/soft/GSE124439_family.soft.gz",
     'GSE124439_miniml': "ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE124nnn/GSE124439/miniml/GSE124439_family.xml.tgz",
+
+    # For downloading Fasta files from FTP
+    'manifest': "https://www.ebi.ac.uk/ena/portal/api/filereport?accession=PRJNA512012&result=read_run&fields=study_accession,sample_accession,experiment_accession,run_accession,tax_id,scientific_name,fastq_ftp,submitted_ftp,sra_ftp&format=tsv&download=true&limit=0",
 }
 
 for url in URLS.values():
     data = download(url).now
     print(data.meta)
 
+with download(URLS['manifest']).now.open(mode='r') as fd:
+    df = pd.read_table(fd)
+    df.to_csv(datapath / "GSE124439_manifest.tsv", compression=None, sep='\t', index=False)
+
 # # Extract HRA-28394, HRA-89876-02 but not HRA-23938-b38
 # extract_hra = (lambda t: unlist1(re.findall(r"(HRA-[0-9]+(?:-[0-9]+)?)", t)))
 # Extract HRA-28394 only, drop suffix
 extract_hra = (lambda t: unlist1(re.findall(r"(HRA-[0-9]+)", t)))
-
-import pandas as pd
-import tarfile
-import xml.etree.ElementTree as ET
 
 with download(URLS["GSE124439_miniml"]).now.open(mode='rb') as tf:
     with tarfile.open(fileobj=tf, mode='r') as tar:
